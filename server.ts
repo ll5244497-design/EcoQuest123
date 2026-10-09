@@ -395,9 +395,9 @@ app.post('/api/voice-guide/interact', async (req, res) => {
   try {
     const {
       query,
-      guideVoiceId = 'EXAVITQu4vr4xnSDxMaL',
-      guideName = 'Bella',
-      guideRole = 'Junior Scout Companion',
+      guideVoiceId = 'IKne3meq5aSn9XLyUdCD',
+      guideName = 'Charlie',
+      guideRole = 'Tactical Field Leader & AI Game Master',
       telemetry = {},
       mission = {},
       activeWaypoint = null,
@@ -788,8 +788,22 @@ function getContextualGuideFallback(
   };
 }
 
-// Curated Interactive Human Companion Voices (powered by Gemini Neural Voice)
+// Curated Interactive Human Companion Voices (powered by ElevenLabs & Gemini Neural Voice)
 const HUMAN_GUIDE_VOICES = [
+  {
+    voice_id: 'IKne3meq5aSn9XLyUdCD',
+    name: 'Charlie',
+    role: 'Lead Tactical Scout & Game Master',
+    gender: 'male',
+    accent: 'Australian / Energetic',
+    avatarEmoji: '⚡',
+    tagColor: 'amber',
+    provider: 'elevenlabs',
+    model_id: 'eleven_turbo_v2_5',
+    description: 'Deep, confident, and energetic. The official ElevenLabs tactical voice leading your outdoor expedition missions and nature crafts.',
+    preview_prompt:
+      "G'day Explorer! I'm Charlie, your Tactical Field Guide. Eyes sharp, let's track down the crafting materials!",
+  },
   {
     voice_id: 'Zephyr',
     name: 'Zephyr',
@@ -798,6 +812,7 @@ const HUMAN_GUIDE_VOICES = [
     accent: 'American',
     avatarEmoji: '🌿',
     tagColor: 'emerald',
+    provider: 'gemini',
     description: 'Enthusiastic, observant, and warm. Celebrates every leaf, trail, and outdoor discovery like a real companion hiking beside you.',
     preview_prompt:
       'Hey Explorer! Look around—the trail ahead is quiet and peaceful. Take a deep breath and tell me what you see on the ground!',
@@ -810,6 +825,7 @@ const HUMAN_GUIDE_VOICES = [
     accent: 'American',
     avatarEmoji: '🦊',
     tagColor: 'amber',
+    provider: 'gemini',
     description: 'Upbeat, energetic, and quick-witted. Loves trail jogging, spotting critters, and finding hidden nature treasures.',
     preview_prompt:
       'Awesome pace, Scout! The canopy looks incredible up ahead. Keep your eyes peeled for curved twigs and fallen leaves!',
@@ -822,6 +838,7 @@ const HUMAN_GUIDE_VOICES = [
     accent: 'American',
     avatarEmoji: '🦉',
     tagColor: 'teal',
+    provider: 'gemini',
     description: 'Grounded, mindful, and articulate. Connects real botanical knowledge with calm, comforting wilderness guidance.',
     preview_prompt:
       'Take a slow, mindful step. Feel the cool air moving through the branches. Let nature guide our expedition today.',
@@ -834,6 +851,7 @@ const HUMAN_GUIDE_VOICES = [
     accent: 'Deep / Steady',
     avatarEmoji: '🌲',
     tagColor: 'stone',
+    provider: 'gemini',
     description: 'Calm, steady, and reassuring. Experienced field survivalist and natural navigator.',
     preview_prompt:
       'Steady your stride, Explorer. Keep your eyes on the trail edges and follow the natural contours of the earth.',
@@ -846,11 +864,75 @@ const HUMAN_GUIDE_VOICES = [
     accent: 'Resonant / Thoughtful',
     avatarEmoji: '🪨',
     tagColor: 'slate',
+    provider: 'gemini',
     description: 'Rich, resonant storyteller fascinated by geology, stone formations, ancient riverbeds, and deep forest lore.',
     preview_prompt:
       'Listen closely to the ground beneath our boots. Every stone and creek bed here holds thousands of years of living history.',
   },
 ];
+
+// ElevenLabs API Configuration
+let customElevenLabsApiKey =
+  process.env.ELEVENLABS_API_KEY || '33fcd7b69062fca952ae8ba0156513b9245afe81639c5be0d27110b5a245736b';
+const DEFAULT_ELEVENLABS_VOICE_ID = 'IKne3meq5aSn9XLyUdCD'; // Charlie - Deep, Confident, Energetic
+
+// Helper: Synthesize speech via ElevenLabs API (with automatic model negotiation)
+async function synthesizeElevenLabsSpeech(
+  text: string,
+  voiceId: string = DEFAULT_ELEVENLABS_VOICE_ID
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const apiKey = customElevenLabsApiKey?.trim();
+  if (!apiKey) return null;
+
+  const models = ['eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_multilingual_v2'];
+  const targetVoiceId = voiceId && voiceId.length >= 10 ? voiceId : DEFAULT_ELEVENLABS_VOICE_ID;
+
+  for (const modelId of models) {
+    try {
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${targetVoiceId}?output_format=mp3_44100_128`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'audio/mpeg',
+        },
+        body: JSON.stringify({
+          text: text.slice(0, 2000),
+          model_id: modelId,
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const arrayBuf = await response.arrayBuffer();
+        if (arrayBuf.byteLength > 0) {
+          console.log(`[ElevenLabs TTS] Successfully synthesized ${arrayBuf.byteLength} bytes with model ${modelId} for voice ${targetVoiceId}`);
+          return {
+            buffer: Buffer.from(arrayBuf),
+            mimeType: 'audio/mpeg',
+          };
+        }
+      } else {
+        const errorBody = await response.text();
+        console.warn(`[ElevenLabs TTS] Status ${response.status} with model ${modelId}:`, errorBody.slice(0, 200));
+        // If authentication error due to key length, stop retrying other models
+        if (response.status === 400 && errorBody.includes('api_key')) {
+          break;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[ElevenLabs TTS] Network error with model ${modelId}:`, err.message);
+    }
+  }
+
+  return null;
+}
 
 // Helper: Synthesize speech with Gemini Neural TTS (gemini-3.8-flash-lite-tts)
 async function synthesizeGeminiSpeech(text: string, voiceName: string = 'Zephyr'): Promise<Buffer | null> {
@@ -887,38 +969,100 @@ async function synthesizeGeminiSpeech(text: string, voiceName: string = 'Zephyr'
   return null;
 }
 
-// Endpoint: High-Fidelity Human Voice Synthesis via Gemini Neural Speech
-app.post('/api/voice-guide/speak', async (req, res) => {
+// Unified Speech Synthesis (ElevenLabs Primary -> Gemini Neural TTS Fallback)
+async function synthesizeSpeech(
+  text: string,
+  voiceIdOrName: string = DEFAULT_ELEVENLABS_VOICE_ID
+): Promise<{ buffer: Buffer; mimeType: string; source: string; voice: string } | null> {
+  const clean = text.trim();
+  if (!clean) return null;
+
+  // 1. Try ElevenLabs TTS first (supports Charlie IKne3meq5aSn9XLyUdCD)
+  const isElevenVoice =
+    voiceIdOrName === DEFAULT_ELEVENLABS_VOICE_ID ||
+    voiceIdOrName.length >= 15 ||
+    voiceIdOrName.toLowerCase().includes('charlie');
+
+  if (isElevenVoice || customElevenLabsApiKey) {
+    const elevenResult = await synthesizeElevenLabsSpeech(
+      clean,
+      isElevenVoice ? voiceIdOrName : DEFAULT_ELEVENLABS_VOICE_ID
+    );
+    if (elevenResult) {
+      return {
+        buffer: elevenResult.buffer,
+        mimeType: elevenResult.mimeType,
+        source: 'elevenlabs',
+        voice: 'Charlie (IKne3meq5aSn9XLyUdCD)',
+      };
+    }
+  }
+
+  // 2. High-Fidelity Gemini Neural Speech Fallback
+  const geminiWav = await synthesizeGeminiSpeech(clean, voiceIdOrName || 'Zephyr');
+  if (geminiWav) {
+    return {
+      buffer: geminiWav,
+      mimeType: 'audio/wav',
+      source: 'gemini-neural-speech',
+      voice: voiceIdOrName || 'Zephyr',
+    };
+  }
+
+  return null;
+}
+
+// Endpoint: High-Fidelity Human Voice Synthesis via ElevenLabs & Gemini Neural Speech
+app.post(['/api/voice-guide/speak', '/api/elevenlabs/tts'], async (req, res) => {
   try {
-    const { text, voiceName = 'Zephyr', voiceId } = req.body;
+    const { text, voiceName, voiceId } = req.body;
     if (!text || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'Text prompt is required' });
     }
 
-    const selectedVoice = voiceName || voiceId || 'Zephyr';
-    const wavBuffer = await synthesizeGeminiSpeech(text.trim(), selectedVoice);
+    const requestedVoice = voiceId || voiceName || DEFAULT_ELEVENLABS_VOICE_ID;
+    const result = await synthesizeSpeech(text.trim(), requestedVoice);
 
-    if (wavBuffer) {
-      res.setHeader('Content-Type', 'audio/wav');
-      res.setHeader('Content-Length', wavBuffer.byteLength);
-      res.setHeader('X-Voice-Source', 'gemini-neural-speech');
-      res.setHeader('X-Voice-Name', selectedVoice);
+    if (result) {
+      res.setHeader('Content-Type', result.mimeType);
+      res.setHeader('Content-Length', result.buffer.byteLength);
+      res.setHeader('X-Voice-Source', result.source);
+      res.setHeader('X-Voice-Name', result.voice);
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      return res.end(wavBuffer);
+      return res.end(result.buffer);
     }
 
     return res.status(200).json({
       success: false,
       fallback: true,
-      message: 'Gemini Neural Voice synthesis in fallback mode. Browser human voice active.',
+      message: 'Neural voice synthesis falling back to browser speech synthesis.',
     });
   } catch (err: any) {
-    console.error('Error in /api/voice-guide/speak:', err);
+    console.error('Error in voice synthesis endpoint:', err);
     return res.status(200).json({
       success: false,
       fallback: true,
       error: err.message,
     });
+  }
+});
+
+// Endpoint: Update or provide custom ElevenLabs API key dynamically
+app.post('/api/elevenlabs/set-key', (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+      return res.status(400).json({ error: 'apiKey string required' });
+    }
+    customElevenLabsApiKey = apiKey.trim();
+    console.log('[ElevenLabs] Updated active API key on server');
+    return res.json({
+      success: true,
+      message: 'ElevenLabs API key successfully updated on server',
+      activeVoiceId: DEFAULT_ELEVENLABS_VOICE_ID,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -926,52 +1070,28 @@ app.post('/api/voice-guide/speak', async (req, res) => {
 app.get(['/api/voice-guide/voices', '/api/elevenlabs/voices'], (_req, res) => {
   res.json({
     success: true,
-    source: 'gemini-human-voices',
+    source: 'elevenlabs-and-gemini',
+    activeVoiceId: DEFAULT_ELEVENLABS_VOICE_ID,
     voices: HUMAN_GUIDE_VOICES,
   });
 });
 
-// Endpoint: Check voice engine status (Always active via Gemini API)
+// Endpoint: Check voice engine status
 app.get(['/api/voice-guide/status', '/api/elevenlabs/status'], (_req, res) => {
+  const hasKey = Boolean(customElevenLabsApiKey && customElevenLabsApiKey.length > 5);
   res.json({
     configured: true,
-    hasKey: true,
-    engine: 'gemini-neural-voice',
+    hasElevenLabsKey: hasKey,
+    activeEngine: 'elevenlabs-primary',
+    fallbackEngine: 'gemini-neural-speech',
+    defaultVoiceId: DEFAULT_ELEVENLABS_VOICE_ID,
+    defaultVoiceName: 'Charlie (Lead Tactical Scout)',
     models: [
-      { id: 'gemini_neural_v3', name: 'Gemini Neural Human Speech', description: 'Interactive, human-like voice synthesis directly from Google Gemini', badge: 'Active' },
+      { id: 'eleven_turbo_v2_5', name: 'ElevenLabs Turbo v2.5', badge: 'Active' },
+      { id: 'eleven_flash_v2_5', name: 'ElevenLabs Flash v2.5', badge: 'Fast' },
+      { id: 'gemini_neural_v3', name: 'Gemini Neural Speech (Fallback)', badge: 'Ready' },
     ],
-    defaultVoiceId: 'Zephyr',
   });
-});
-
-// Backward-compatible TTS route for existing calls
-app.post('/api/elevenlabs/tts', async (req, res) => {
-  try {
-    const { text, voiceId = 'Zephyr' } = req.body;
-    if (!text || typeof text !== 'string' || !text.trim()) {
-      return res.status(400).json({ error: 'Text prompt is required' });
-    }
-
-    const wavBuffer = await synthesizeGeminiSpeech(text.trim(), voiceId);
-    if (wavBuffer) {
-      res.setHeader('Content-Type', 'audio/wav');
-      res.setHeader('Content-Length', wavBuffer.byteLength);
-      res.setHeader('X-Voice-Source', 'gemini-neural-speech');
-      return res.end(wavBuffer);
-    }
-
-    return res.status(200).json({
-      success: false,
-      fallback: true,
-      message: 'Speech synthesis fell back to browser voice.',
-    });
-  } catch (err: any) {
-    return res.status(200).json({
-      success: false,
-      fallback: true,
-      error: err.message,
-    });
-  }
 });
 
 // Endpoint: Real-time outdoor weather proxy via Open-Meteo with fallback

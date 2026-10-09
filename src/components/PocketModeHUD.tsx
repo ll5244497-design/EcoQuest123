@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Radio, Compass, Footprints, Shield, Zap, Sparkles, Smartphone, ChevronRight, Headphones, Music } from 'lucide-react';
+import { Volume2, VolumeX, Radio, Compass, Footprints, Shield, Zap, Sparkles, Smartphone, ChevronRight, Headphones, Music, Mic, MicOff, RotateCcw } from 'lucide-react';
 import { ambientAudioService } from '../services/ambientAudioService';
 import { movementTrackingService, MovementTelemetry } from '../services/movementTrackingService';
+import { voiceAssistantService, VoiceAssistantState } from '../services/voiceAssistantService';
 import { hapticFeedback } from '../utils/haptics';
 
 interface PocketModeHUDProps {
@@ -22,13 +23,18 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
     movementTrackingService.getTelemetry()
   );
   const [audioState, setAudioState] = useState(ambientAudioService.getState());
+  const [voiceState, setVoiceState] = useState<VoiceAssistantState>(
+    voiceAssistantService.getState()
+  );
 
   useEffect(() => {
     const unsubMotion = movementTrackingService.subscribe((t) => setTelemetry(t));
     const unsubAudio = ambientAudioService.subscribe((a) => setAudioState(a));
+    const unsubVoice = voiceAssistantService.subscribe((v) => setVoiceState(v));
     return () => {
       unsubMotion();
       unsubAudio();
+      unsubVoice();
     };
   }, []);
 
@@ -129,50 +135,85 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
 
           <div className="flex justify-between text-[10px] font-mono text-neutral-500 mt-2">
             <span>Nature Audio: Gentle Mountain Breeze</span>
-            <span>Target: Ancient Redwood Grove</span>
+            <span>Guide: Charlie (ElevenLabs AI)</span>
           </div>
         </div>
+
+        {/* Live Voice Assistant Comm Line */}
+        {voiceState.lastSpokenText && (
+          <div className="w-full max-w-sm mt-3 p-2.5 rounded-xl bg-neutral-900/90 border border-emerald-500/30 text-left">
+            <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 font-bold mb-1">
+              <span className="flex items-center gap-1">
+                <Volume2 className="w-3 h-3" /> CHARLIE (EARPHONES):
+              </span>
+              <span className="text-neutral-500">{voiceState.status.toUpperCase()}</span>
+            </div>
+            <p className="text-xs font-sans text-neutral-200 line-clamp-2">
+              "{voiceState.lastSpokenText}"
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Tactile Touch Targets for Pocket Blind Operation */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-white/10">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-4 border-t border-white/10">
+        {/* Voice Assistant Mic Button */}
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            voiceAssistantService.toggleListening();
+          }}
+          className={`w-full py-3.5 px-3 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg ${
+            voiceState.status === 'listening'
+              ? 'bg-cyan-500 text-black animate-pulse'
+              : voiceState.status === 'speaking'
+              ? 'bg-amber-500 text-black'
+              : 'bg-emerald-600 hover:bg-emerald-500 text-black'
+          }`}
+        >
+          {voiceState.status === 'listening' ? (
+            <>
+              <MicOff className="w-4 h-4 shrink-0" />
+              <span>LISTENING...</span>
+            </>
+          ) : (
+            <>
+              <Mic className="w-4 h-4 shrink-0" />
+              <span>TALK TO CHARLIE</span>
+            </>
+          )}
+        </button>
+
         <button
           onClick={triggerPing}
-          className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-black font-mono font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 cursor-pointer"
+          className="w-full py-3.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-white/10 active:scale-[0.98] text-emerald-400 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          <Radio className="w-5 h-5 shrink-0" />
+          <Radio className="w-4 h-4 shrink-0" />
           <span>PING RADAR</span>
         </button>
 
         {/* Soothing Soundscape Play/Pause */}
         <button
           onClick={toggleAmbientSound}
-          className={`w-full py-4 px-4 font-mono font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 border cursor-pointer ${
+          className={`w-full py-3.5 px-3 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 border cursor-pointer ${
             audioState.isPlaying
               ? 'bg-neutral-900 text-emerald-400 border-emerald-500/40 active:scale-[0.98]'
-              : 'bg-emerald-700 hover:bg-emerald-600 text-white border-emerald-500'
+              : 'bg-emerald-950 text-emerald-300 border-emerald-600'
           }`}
         >
-          <Music className="w-5 h-5 shrink-0" />
-          <span>{audioState.isPlaying ? 'PAUSE AMBIENT AUDIO' : 'PLAY SOOTHING AUDIO'}</span>
+          <Music className="w-4 h-4 shrink-0" />
+          <span>{audioState.isPlaying ? 'PAUSE AUDIO' : 'PLAY AUDIO'}</span>
         </button>
 
         <button
           onClick={() => {
-            setSoundType((prev) =>
-              prev === 'cricket' ? 'leaf_rustle' : prev === 'leaf_rustle' ? 'stream' : 'cricket'
-            );
+            hapticFeedback.tactileClick();
+            voiceAssistantService.replayLastMessage();
           }}
-          className="w-full py-4 px-4 bg-neutral-900 hover:bg-neutral-800 border border-white/10 active:scale-[0.98] text-white font-mono text-xs rounded-xl transition-all flex items-center justify-between cursor-pointer"
+          className="w-full py-3.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-white/10 active:scale-[0.98] text-neutral-300 font-mono text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          <div className="flex items-center gap-2 text-left truncate">
-            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div className="truncate">
-              <div className="text-[10px] text-neutral-400 uppercase">BEACON CUE</div>
-              <div className="font-semibold text-white capitalize truncate">{soundType.replace('_', ' ')}</div>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-neutral-500 shrink-0" />
+          <RotateCcw className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>REPLAY VOICE</span>
         </button>
       </div>
 

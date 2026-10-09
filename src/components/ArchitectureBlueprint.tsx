@@ -215,10 +215,10 @@ export function createAudioReactivePetMaterial() {
             STEP 04
           </div>
           <div className="text-sm font-semibold text-stone-900 dark:text-white mb-1">
-            Gemini Neural Voice
+            ElevenLabs & Neural TTS
           </div>
           <p className="text-xs text-stone-500">
-            Synthesizes warm human companion voices (Zephyr, Puck, Kore, Fenrir, Charon) with high-fidelity prosody and emotional cadence.
+            Synthesizes lead guide Charlie (ElevenLabs Voice ID: IKne3meq5aSn9XLyUdCD, Turbo v2.5) with Gemini Neural Voice fallback for high-fidelity spoken leadership.
           </p>
         </div>
 

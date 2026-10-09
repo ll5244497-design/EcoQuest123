@@ -37,6 +37,8 @@ import {
 import { hapticFeedback } from '../utils/haptics';
 import { TacticalGoogleMap } from './TacticalGoogleMap';
 import { getCurrentGreeting } from '../utils/timeGreeting';
+import { VoiceAssistantHUD } from './VoiceAssistantHUD';
+import { voiceAssistantService } from '../services/voiceAssistantService';
 
 interface MissionHUDProps {
   explorerName: string;
@@ -163,10 +165,29 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         difficulty: 'Adventurer',
       });
       setActiveMission(newMission);
+      voiceAssistantService.announceExpeditionStart(newMission, explorerName);
     } catch (err) {
       console.error(err);
     } finally {
       setIsGeneratingMission(false);
+    }
+  };
+
+  const handleVoiceAction = (action: string) => {
+    if (action === 'SHOW_LOCATION') {
+      hapticFeedback.radarPulse();
+      // Scroll to tactical map if on mobile
+      const mapElem = document.getElementById('tactical-google-map');
+      if (mapElem) {
+        mapElem.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else if (action === 'COMPLETE_TASK') {
+      hapticFeedback.buttonPress();
+      setIsPhotoModalOpen(true);
+    } else if (action === 'NEXT_TASK') {
+      handleGenerateGeminiMission();
+    } else if (action === 'POCKET_MODE') {
+      onOpenPocketMode();
     }
   };
 
@@ -175,6 +196,12 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
     setIsPhotoModalOpen(false);
     setTotalXp((prev) => prev + activeMission.rewardXp);
     setCurrentLevel((prev) => Math.min(prev + 1, 7));
+
+    // Announce craft verification through voice assistant!
+    voiceAssistantService.announceCraftVerified(
+      activeMission.stickerReward.name,
+      activeMission.rewardXp
+    );
 
     const newSticker: StickerEntry = {
       id: `stk-${Date.now()}`,
@@ -287,7 +314,19 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       </div>
 
       {/* =========================================================================
-          2. CORE MISSION EXPEDITION DECK: 3D CHARACTER + TACTICAL GOOGLE MAP
+          2. TACTICAL AI VOICE ASSISTANT & GAME LEADER (CHARLIE · ELEVENLABS)
+          Leads the expedition with autonomous reasoning, voice TTS & voice commands
+          ========================================================================= */}
+      <VoiceAssistantHUD
+        telemetry={telemetry}
+        mission={activeMission}
+        activeWaypoint={missionWaypoints[0] || null}
+        explorerName={explorerName}
+        onActionTriggered={handleVoiceAction}
+      />
+
+      {/* =========================================================================
+          3. CORE MISSION EXPEDITION DECK: 3D CHARACTER + TACTICAL GOOGLE MAP
           Both the 3D Character and Tactical Map are cleanly presented!
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-stretch">
@@ -331,8 +370,8 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
           </div>
         </div>
 
-        {/* Right Deck: Tactical Google Map (Clean, waypoint radar removed) */}
-        <div className="flex flex-col">
+        {/* Right Deck: Tactical Google Map */}
+        <div id="tactical-google-map" className="flex flex-col">
           <TacticalGoogleMap
             telemetry={telemetry}
             waypoints={missionWaypoints}
