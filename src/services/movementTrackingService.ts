@@ -10,6 +10,8 @@ export interface MovementTelemetry {
   distanceCoveredMeters: number;
   stepCount: number;
   headingDegrees: number;
+  headingSource: 'gyro' | 'gps' | 'manual' | 'simulated';
+  hasSensorHeading: boolean;
   timeAtRestSeconds: number;
   timeMovingSeconds: number;
   latitude: number;
@@ -21,6 +23,8 @@ export interface MovementTelemetry {
   localityName?: string;
   activeMovementTask: string | null;
   lastStateChange: number;
+  tiltBeta?: number; // Device pitch (-180 to 180)
+  tiltGamma?: number; // Device roll (-90 to 90)
 }
 
 type MovementListener = (telemetry: MovementTelemetry) => void;
@@ -29,7 +33,9 @@ type VerbalPromptTrigger = (promptText: string, reason: 'RESTING_NUDGE' | 'PACE_
 class MovementTrackingService {
   private watchId: number | null = null;
   private motionHandler: ((e: DeviceMotionEvent) => void) | null = null;
+  private orientationHandler: ((e: DeviceOrientationEvent) => void) | null = null;
   private intervalTimer: any = null;
+  private joystickTimer: any = null;
   private listeners: Set<MovementListener> = new Set();
   private verbalPromptTriggers: Set<VerbalPromptTrigger> = new Set();
 
@@ -48,6 +54,11 @@ class MovementTrackingService {
   private simHeading: number = 45;
   private breadcrumbs: Array<{ lat: number; lng: number }> = [];
 
+  // Active smooth heading tracking
+  private targetHeading: number = 0;
+  private currentSmoothedHeading: number = 0;
+  private hasReceivedSensorEvent: boolean = false;
+
   private telemetry: MovementTelemetry = {
     state: 'AT_REST',
     speedMps: 0,
@@ -55,6 +66,8 @@ class MovementTrackingService {
     distanceCoveredMeters: 0,
     stepCount: 0,
     headingDegrees: 0,
+    headingSource: 'manual',
+    hasSensorHeading: false,
     timeAtRestSeconds: 0,
     timeMovingSeconds: 0,
     latitude: 37.7749,
@@ -63,7 +76,7 @@ class MovementTrackingService {
     isGpsActive: false,
     isSimulating: false,
     breadcrumbs: [],
-    activeMovementTask: 'Put phone in pocket and take 20 paces forward to begin tracking.',
+    activeMovementTask: 'Put phone in pocket or walk with device to begin live tracking.',
     lastStateChange: Date.now(),
   };
 
@@ -119,7 +132,7 @@ class MovementTrackingService {
           },
           {
             enableHighAccuracy: true,
-            maximumAge: 1000,
+            maximumAge: 500,
             timeout: 10000,
           }
         );
@@ -141,6 +154,9 @@ class MovementTrackingService {
         // Step peak threshold
         if (delta > 2.2) {
           this.telemetry.stepCount += 1;
+          this.telemetry.distanceCoveredMeters += 1;
+          this.telemetry.state = 'MOVING';
+          this.notify();
         }
       };
 
@@ -149,10 +165,200 @@ class MovementTrackingService {
       } catch (_) {}
     }
 
-    // 3. Periodic cadence timer (evaluates rest vs moving state every second)
+    // 3. Real-Time 360° Device Orientation / Gyroscope / Compass
+    this.bindOrientationListeners();
+
+    // 4. Periodic cadence timer (evaluates rest vs moving state every second)
     this.intervalTimer = setInterval(() => {
       this.tickMovementState();
     }, 1000);
+  }
+
+  /**
+   * Binds device orientation listeners for iOS and Android
+   */
+  public bindOrientationListeners() {
+    if (typeof window === 'undefined') return;
+
+    this.orientationHandler = (event: DeviceOrientationEvent) => {
+      let rawHeading: number | null = null;
+
+      // iOS WebKit Compass Heading (0 = North, 90 = East, 180 = South, 270 = West)
+      if ('webkitCompassHeading' in event && typeof (event as any).webkitCompassHeading === 'number') {
+        const compassHeading = (event as any).webkitCompassHeading;
+        if (!isNaN(compassHeading) && compassHeading >= 0) {
+          rawHeading = compassHeading;
+        }
+      }
+      // Android / Standard deviceorientation
+      else if (event.alpha !== null && !isNaN(event.alpha)) {
+        // In Chrome Android: alpha increases counter-clockwise from 0 to 360
+        // Heading is clockwise from North (0): (360 - alpha) % 360
+        rawHeading = (360 - event.alpha) % 360;
+      }
+
+      if (rawHeading !== null) {
+        this.hasReceivedSensorEvent = true;
+
+        // Compensate for screen orientation (portrait vs landscape)
+        let screenAngle = 0;
+        try {
+          if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+            screenAngle = window.screen.orientation.angle;
+          } else if (typeof (window as any).orientation === 'number') {
+            screenAngle = (window as any).orientation;
+          }
+        } catch (_) {}
+
+        const adjustedHeading = ((rawHeading + screenAngle) % 360 + 360) % 360;
+        this.targetHeading = adjustedHeading;
+
+        // Circular smooth interpolation to avoid jitter
+        this.currentSmoothedHeading = this.smoothCircularAngle(
+          this.currentSmoothedHeading,
+          this.targetHeading,
+          0.4
+        );
+
+        this.telemetry.headingDegrees = Math.round(this.currentSmoothedHeading);
+        this.telemetry.hasSensorHeading = true;
+        this.telemetry.headingSource = 'gyro';
+
+        if (event.beta !== null && !isNaN(event.beta)) {
+          this.telemetry.tiltBeta = Math.round(event.beta);
+        }
+        if (event.gamma !== null && !isNaN(event.gamma)) {
+          this.telemetry.tiltGamma = Math.round(event.gamma);
+        }
+
+        this.notify();
+      }
+    };
+
+    try {
+      const win = window as any;
+      if ('ondeviceorientationabsolute' in win) {
+        win.addEventListener('deviceorientationabsolute', this.orientationHandler, { passive: true });
+      } else if ('DeviceOrientationEvent' in win) {
+        win.addEventListener('deviceorientation', this.orientationHandler, { passive: true });
+      }
+    } catch (e) {
+      console.warn('Orientation listener bind error:', e);
+    }
+  }
+
+  /**
+   * Request iOS 13+ Device Orientation permission on user gesture
+   */
+  public async requestOrientationPermission(): Promise<boolean> {
+    if (
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof (DeviceOrientationEvent as any).requestPermission === 'function'
+    ) {
+      try {
+        const state = await (DeviceOrientationEvent as any).requestPermission();
+        if (state === 'granted') {
+          this.bindOrientationListeners();
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.warn('DeviceOrientation permission request failed:', err);
+        return false;
+      }
+    }
+    // Non-iOS or older devices already grant access by default
+    return true;
+  }
+
+  /**
+   * Smooth circular angle interpolation (shortest arc across 0/360 boundary)
+   */
+  private smoothCircularAngle(current: number, target: number, factor: number): number {
+    let diff = (target - current) % 360;
+    if (diff < -180) diff += 360;
+    if (diff > 180) diff -= 360;
+    return ((current + diff * factor) % 360 + 360) % 360;
+  }
+
+  /**
+   * Manually rotate heading by delta degrees (e.g., Left -10°, Right +10° on laptop or dial)
+   */
+  public rotateHeading(deltaDegrees: number) {
+    const next = ((this.telemetry.headingDegrees + deltaDegrees) % 360 + 360) % 360;
+    this.setHeading(next, 'manual');
+  }
+
+  /**
+   * Explicitly sets the 360° heading
+   */
+  public setHeading(degrees: number, source: 'gyro' | 'gps' | 'manual' | 'simulated' = 'manual') {
+    const normalized = ((degrees % 360) + 360) % 360;
+    this.currentSmoothedHeading = normalized;
+    this.targetHeading = normalized;
+    this.telemetry.headingDegrees = Math.round(normalized);
+    this.telemetry.headingSource = source;
+    this.notify();
+  }
+
+  /**
+   * Moves the user position forward in the current heading direction by meters
+   * Perfect for Laptop Keyboard Controls (WASD / Arrows) and Virtual Joystick
+   */
+  public moveInHeading(distanceMeters: number, explicitHeading?: number) {
+    const headingToUse = explicitHeading !== undefined ? explicitHeading : this.telemetry.headingDegrees;
+    const headingRad = (headingToUse * Math.PI) / 180;
+
+    const metersToLat = 1 / 111111;
+    const metersToLng = 1 / (111111 * Math.cos((this.telemetry.latitude * Math.PI) / 180));
+
+    const dLat = Math.cos(headingRad) * distanceMeters * metersToLat;
+    const dLng = Math.sin(headingRad) * distanceMeters * metersToLng;
+
+    this.telemetry.latitude += dLat;
+    this.telemetry.longitude += dLng;
+    this.telemetry.distanceCoveredMeters += Math.round(Math.abs(distanceMeters));
+    this.telemetry.stepCount += Math.max(1, Math.round(Math.abs(distanceMeters) * 1.3));
+    this.telemetry.state = 'MOVING';
+
+    const calculatedMps = Math.max(1.2, Math.abs(distanceMeters) / 0.5);
+    this.telemetry.speedMps = Math.round(calculatedMps * 10) / 10;
+    this.telemetry.speedKmh = Math.round(calculatedMps * 3.6 * 10) / 10;
+
+    const currentPt = { lat: this.telemetry.latitude, lng: this.telemetry.longitude };
+    this.breadcrumbs.push(currentPt);
+    if (this.breadcrumbs.length > 250) this.breadcrumbs.shift();
+    this.telemetry.breadcrumbs = [...this.breadcrumbs];
+
+    this.notify();
+  }
+
+  /**
+   * Starts a continuous virtual movement vector (joystick or held keys)
+   */
+  public startDirectionalMove(headingDeg: number, speedMps: number = 1.6) {
+    this.setHeading(headingDeg, 'manual');
+    if (this.joystickTimer) clearInterval(this.joystickTimer);
+
+    // Update at 10Hz (every 100ms) for ultra-smooth movement on map
+    const metersPerTick = speedMps * 0.1;
+    this.joystickTimer = setInterval(() => {
+      this.moveInHeading(metersPerTick, headingDeg);
+    }, 100);
+  }
+
+  /**
+   * Stops directional movement
+   */
+  public stopDirectionalMove() {
+    if (this.joystickTimer) {
+      clearInterval(this.joystickTimer);
+      this.joystickTimer = null;
+    }
+    this.telemetry.speedMps = 0;
+    this.telemetry.speedKmh = 0;
+    this.telemetry.state = 'AT_REST';
+    this.notify();
   }
 
   private handleGpsUpdate(pos: GeolocationPosition) {
@@ -521,6 +727,16 @@ class MovementTrackingService {
     if (this.motionHandler) {
       window.removeEventListener('devicemotion', this.motionHandler);
       this.motionHandler = null;
+    }
+    if (this.orientationHandler && typeof window !== 'undefined') {
+      const win = window as any;
+      win.removeEventListener('deviceorientationabsolute', this.orientationHandler);
+      win.removeEventListener('deviceorientation', this.orientationHandler);
+      this.orientationHandler = null;
+    }
+    if (this.joystickTimer) {
+      clearInterval(this.joystickTimer);
+      this.joystickTimer = null;
     }
     if (this.intervalTimer) {
       clearInterval(this.intervalTimer);

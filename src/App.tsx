@@ -726,7 +726,9 @@ export default function App() {
 
           <TacticalGoogleMap
             telemetry={telemetry}
-            waypoints={[]}
+            waypoints={appWaypoints}
+            activeWaypoint={activeMapWaypoint}
+            onSelectWaypoint={setActiveMapWaypoint}
             explorerName={explorerName}
           />
         </main>

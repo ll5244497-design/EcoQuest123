@@ -198,6 +198,33 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
     }
   };
 
+  const missionWaypoints = React.useMemo(() => [
+    {
+      id: 'wp-craft-objective',
+      name: activeMission.targetLandmark || 'Dragon Crafting Clearing',
+      category: 'Botanical' as const,
+      description: activeMission.craftInstructions || activeMission.objective,
+      audioPrompt: 'Collect your craft items and assemble on the ground.',
+      lat: (telemetry.latitude || 37.7749) + 0.0005,
+      lng: (telemetry.longitude || -122.4194) + 0.0006,
+      icon: '🍃',
+      completed: false,
+      distanceMeters: activeMission.targetDistanceMeters || 120,
+    },
+    {
+      id: 'wp-geo-pebbles',
+      name: 'River Pebble Deposit',
+      category: 'Geo' as const,
+      description: 'Search near gravel or dry dirt path for smooth dragon eye pebbles.',
+      audioPrompt: 'Collect two smooth pebbles for the dragon eyes.',
+      lat: (telemetry.latitude || 37.7749) - 0.0004,
+      lng: (telemetry.longitude || -122.4194) + 0.0005,
+      icon: '🪨',
+      completed: false,
+      distanceMeters: 65,
+    },
+  ], [telemetry.latitude, telemetry.longitude, activeMission]);
+
   return (
     <div className="relative z-10 w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 select-none font-['Plus_Jakarta_Sans',sans-serif]">
       {/* =========================================================================
@@ -308,7 +335,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         <div className="flex flex-col">
           <TacticalGoogleMap
             telemetry={telemetry}
-            waypoints={[]}
+            waypoints={missionWaypoints}
             explorerName={explorerName}
           />
         </div>
