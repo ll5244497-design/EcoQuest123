@@ -482,8 +482,8 @@ Respond ONLY with valid JSON:
 }`;
 
     let text = '';
-    let usedModel = 'gemini-3.8-flash';
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    let usedModel = 'gemini-3.1-flash-lite';
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
     for (const m of modelsToTry) {
       try {
@@ -872,8 +872,26 @@ const HUMAN_GUIDE_VOICES = [
 ];
 
 // ElevenLabs API Configuration
-let customElevenLabsApiKey =
-  process.env.ELEVENLABS_API_KEY || '33fcd7b69062fca952ae8ba0156513b9245afe81639c5be0d27110b5a245736b';
+// Valid ElevenLabs secret API keys start with 'sk_' and are 51 characters, or legacy 32-hex keys.
+// Key IDs (64 characters) cannot be used directly as API keys.
+function isValidElevenLabsApiKey(key?: string | null): boolean {
+  if (!key) return false;
+  const trimmed = key.trim();
+  if (trimmed.length === 64 || trimmed === '33fcd7b69062fca952ae8ba0156513b9245afe81639c5be0d27110b5a245736b') {
+    return false;
+  }
+  if (trimmed.startsWith('sk_') && trimmed.length >= 45 && trimmed.length <= 55) {
+    return true;
+  }
+  if (/^[a-f0-9]{32}$/i.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+let customElevenLabsApiKey: string = isValidElevenLabsApiKey(process.env.ELEVENLABS_API_KEY)
+  ? (process.env.ELEVENLABS_API_KEY || '').trim()
+  : '';
 const DEFAULT_ELEVENLABS_VOICE_ID = 'IKne3meq5aSn9XLyUdCD'; // Charlie - Deep, Confident, Energetic
 
 // Helper: Synthesize speech via ElevenLabs API (with automatic model negotiation)
@@ -881,10 +899,10 @@ async function synthesizeElevenLabsSpeech(
   text: string,
   voiceId: string = DEFAULT_ELEVENLABS_VOICE_ID
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const apiKey = customElevenLabsApiKey?.trim();
-  if (!apiKey) return null;
+  const rawApiKey = customElevenLabsApiKey?.trim();
+  if (!isValidElevenLabsApiKey(rawApiKey)) return null;
 
-  const models = ['eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_multilingual_v2'];
+  const models = ['eleven_turbo_v2_5', 'eleven_flash_v2_5'];
   const targetVoiceId = voiceId && voiceId.length >= 10 ? voiceId : DEFAULT_ELEVENLABS_VOICE_ID;
 
   for (const modelId of models) {
@@ -893,7 +911,7 @@ async function synthesizeElevenLabsSpeech(
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'xi-api-key': apiKey,
+          'xi-api-key': rawApiKey,
           'Content-Type': 'application/json',
           Accept: 'audio/mpeg',
         },
@@ -901,9 +919,9 @@ async function synthesizeElevenLabsSpeech(
           text: text.slice(0, 2000),
           model_id: modelId,
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.0,
+            stability: 0.38,
+            similarity_boost: 0.85,
+            style: 0.20,
             use_speaker_boost: true,
           },
         }),
@@ -920,14 +938,16 @@ async function synthesizeElevenLabsSpeech(
         }
       } else {
         const errorBody = await response.text();
-        console.warn(`[ElevenLabs TTS] Status ${response.status} with model ${modelId}:`, errorBody.slice(0, 200));
-        // If authentication error due to key length, stop retrying other models
-        if (response.status === 400 && errorBody.includes('api_key')) {
-          break;
+        if (response.status === 401 || response.status === 403) {
+          // Key was rejected by ElevenLabs - disable it to prevent repeat attempts
+          console.warn('[ElevenLabs TTS] Key rejected by ElevenLabs. Disabling until a new key is set.');
+          customElevenLabsApiKey = '';
+          return null;
         }
+        break;
       }
-    } catch (err: any) {
-      console.warn(`[ElevenLabs TTS] Network error with model ${modelId}:`, err.message);
+    } catch (_err) {
+      break;
     }
   }
 
@@ -963,13 +983,13 @@ async function synthesizeGeminiSpeech(text: string, voiceName: string = 'Zephyr'
     if (base64Audio) {
       return Buffer.from(base64Audio, 'base64');
     }
-  } catch (err: any) {
-    console.warn('Gemini Neural TTS generation notice:', err.message);
+  } catch (_err) {
+    // Graceful fallback to browser speech synthesis when limits or quota are met
   }
   return null;
 }
 
-// Unified Speech Synthesis (ElevenLabs Primary -> Gemini Neural TTS Fallback)
+// Unified Speech Synthesis (ElevenLabs Primary -> Gemini Neural TTS Fallback -> Browser Speech)
 async function synthesizeSpeech(
   text: string,
   voiceIdOrName: string = DEFAULT_ELEVENLABS_VOICE_ID
@@ -977,13 +997,13 @@ async function synthesizeSpeech(
   const clean = text.trim();
   if (!clean) return null;
 
-  // 1. Try ElevenLabs TTS first (supports Charlie IKne3meq5aSn9XLyUdCD)
-  const isElevenVoice =
-    voiceIdOrName === DEFAULT_ELEVENLABS_VOICE_ID ||
-    voiceIdOrName.length >= 15 ||
-    voiceIdOrName.toLowerCase().includes('charlie');
+  // 1. Try ElevenLabs TTS first if a valid key is provided
+  if (isValidElevenLabsApiKey(customElevenLabsApiKey)) {
+    const isElevenVoice =
+      voiceIdOrName === DEFAULT_ELEVENLABS_VOICE_ID ||
+      voiceIdOrName.length >= 15 ||
+      voiceIdOrName.toLowerCase().includes('charlie');
 
-  if (isElevenVoice || customElevenLabsApiKey) {
     const elevenResult = await synthesizeElevenLabsSpeech(
       clean,
       isElevenVoice ? voiceIdOrName : DEFAULT_ELEVENLABS_VOICE_ID
@@ -1054,7 +1074,20 @@ app.post('/api/elevenlabs/set-key', (req, res) => {
     if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
       return res.status(400).json({ error: 'apiKey string required' });
     }
-    customElevenLabsApiKey = apiKey.trim();
+    const cleanKey = apiKey.trim();
+    if (cleanKey.length === 64 && !cleanKey.startsWith('sk_')) {
+      return res.status(400).json({
+        success: false,
+        error: 'This looks like an ElevenLabs Key ID (64 characters). Real ElevenLabs Secret API keys start with "sk_" and are 51 characters long. Please create an API key in your ElevenLabs profile.',
+      });
+    }
+    if (!isValidElevenLabsApiKey(cleanKey)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid key format. Valid ElevenLabs API keys start with "sk_" and are 51 characters long.',
+      });
+    }
+    customElevenLabsApiKey = cleanKey;
     console.log('[ElevenLabs] Updated active API key on server');
     return res.json({
       success: true,

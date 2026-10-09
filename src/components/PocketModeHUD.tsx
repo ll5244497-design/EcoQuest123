@@ -135,24 +135,9 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
 
           <div className="flex justify-between text-[10px] font-mono text-neutral-500 mt-2">
             <span>Nature Audio: Gentle Mountain Breeze</span>
-            <span>Guide: Charlie (ElevenLabs AI)</span>
+            <span>Guide: Charlie (Hands-Free AI)</span>
           </div>
         </div>
-
-        {/* Live Voice Assistant Comm Line */}
-        {voiceState.lastSpokenText && (
-          <div className="w-full max-w-sm mt-3 p-2.5 rounded-xl bg-neutral-900/90 border border-emerald-500/30 text-left">
-            <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 font-bold mb-1">
-              <span className="flex items-center gap-1">
-                <Volume2 className="w-3 h-3" /> CHARLIE (EARPHONES):
-              </span>
-              <span className="text-neutral-500">{voiceState.status.toUpperCase()}</span>
-            </div>
-            <p className="text-xs font-sans text-neutral-200 line-clamp-2">
-              "{voiceState.lastSpokenText}"
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Tactile Touch Targets for Pocket Blind Operation */}

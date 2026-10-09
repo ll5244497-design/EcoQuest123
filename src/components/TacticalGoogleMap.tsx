@@ -10,8 +10,6 @@ import {
 import {
   Compass,
   Footprints,
-  Play,
-  Pause,
   Navigation,
   Layers,
   LocateFixed,
@@ -19,11 +17,7 @@ import {
   RotateCw,
   RotateCcw,
   Smartphone,
-  Laptop,
   Crosshair,
-  Sliders,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { LocalityWaypoint } from '../types';
 import { MovementTelemetry, movementTrackingService } from '../services/movementTrackingService';
@@ -235,19 +229,6 @@ export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
     };
   }, []);
 
-  const isSimulating = Boolean(telemetry.isSimulating);
-
-  const handleToggleSimulation = () => {
-    hapticFeedback.tactileClick();
-    movementTrackingService.toggleSimulation(simSpeed);
-  };
-
-  const handleSpeedChange = (speed: number) => {
-    hapticFeedback.tactileClick();
-    setSimSpeedPreset(speed);
-    movementTrackingService.setSimSpeed(speed);
-  };
-
   const handleMapClick = (e: any) => {
     if (!clickToWalkMode) return;
     const latLng = e.detail?.latLng;
@@ -255,11 +236,6 @@ export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
       hapticFeedback.buttonPress();
       movementTrackingService.walkTowards(latLng.lat, latLng.lng, simSpeed);
     }
-  };
-
-  const handleTeleportPreset = (name: string, lat: number, lng: number) => {
-    hapticFeedback.tactileClick();
-    movementTrackingService.teleportTo(lat, lng, name);
   };
 
   const handleRecenter = () => {
@@ -717,121 +693,30 @@ export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
         </div>
       </div>
 
-      {/* 3. Laptop Movement & Live Testing Controls */}
-      <div className="p-3 sm:p-4 bg-stone-900 border-t border-stone-800 space-y-3">
-        {/* Device Mode & Movement Feedback Banner */}
-        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-stone-950 border border-stone-800 text-xs font-mono">
-          <div className="flex items-center gap-2 text-stone-300">
-            {telemetry.hasSensorHeading ? (
-              <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <Laptop className="w-4 h-4 text-emerald-400 shrink-0" />
-            )}
-            <span>
-              <strong>{telemetry.hasSensorHeading ? 'Mobile Sensor Live:' : 'Laptop / Keyboard Mode:'}</strong>{' '}
-              {telemetry.hasSensorHeading
-                ? 'Rotate phone 360° to aim vision beam; walk physically to advance position.'
-                : 'Use WASD / Arrow keys or the 360° Joystick to steer and walk in real time!'}
+      {/* 3. Sleek Live Telemetry Footer */}
+      <div className="px-3.5 py-3 bg-stone-900 border-t border-stone-800 flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
+        <div className="flex items-center gap-2 text-stone-300">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>
+            Live Bearing: <strong className="text-emerald-400">{telemetry.headingDegrees}° {cardinal}</strong>
+          </span>
+          {telemetry.hasSensorHeading ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800">
+              Live Phone 360°
             </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-[11px] text-stone-400">
-            <span>Steps: <strong className="text-white">{telemetry.stepCount}</strong></span>
-            <span className="text-stone-600">·</span>
-            <span>Dist: <strong className="text-emerald-400">{telemetry.distanceCoveredMeters}m</strong></span>
-            <span className="text-stone-600">·</span>
-            <span>Speed: <strong className="text-white">{telemetry.speedMps} m/s</strong></span>
-          </div>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-stone-800 text-stone-300 border border-stone-700">
+              Live Radar
+            </span>
+          )}
         </div>
 
-        {/* 360° Direct Heading Scrub Slider (Lets laptop or stationary users rotate 0°–360° fluidly) */}
-        <div className="flex items-center gap-3 bg-stone-950/70 p-2.5 rounded-2xl border border-stone-800 text-xs font-mono">
-          <div className="flex items-center gap-1.5 text-stone-300 shrink-0">
-            <Compass className="w-4 h-4 text-emerald-400" />
-            <span className="text-[11px]">360° Rotation Dial:</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={359}
-            value={telemetry.headingDegrees}
-            onChange={(e) => movementTrackingService.setHeading(Number(e.target.value), 'manual')}
-            className="flex-1 accent-emerald-500 cursor-pointer h-1.5 bg-stone-800 rounded-lg"
-          />
-          <div className="w-16 text-right font-bold text-emerald-400 text-xs shrink-0">
-            {telemetry.headingDegrees}° {cardinal}
-          </div>
-        </div>
-
-        {/* Simulation Controls: Play/Pause, Pace presets, and Scenic Jumps */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Play/Pause Walk Simulation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleToggleSimulation}
-              className={`px-4 py-2 rounded-xl font-mono text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-md ${
-                isSimulating
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-              }`}
-            >
-              {isSimulating ? (
-                <>
-                  <Pause className="w-4 h-4" />
-                  <span>Pause Walking</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Auto-Walk Simulation</span>
-                </>
-              )}
-            </button>
-
-            {/* Speed Presets */}
-            <div className="flex items-center gap-1 bg-stone-950 p-1 rounded-xl border border-stone-800 text-[11px] font-mono">
-              {[
-                { label: 'Stroll (1.4m/s)', speed: 1.4 },
-                { label: 'Brisk (2.2m/s)', speed: 2.2 },
-                { label: 'Run (3.2m/s)', speed: 3.2 },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => handleSpeedChange(preset.speed)}
-                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                    simSpeed === preset.speed
-                      ? 'bg-stone-800 text-emerald-400 font-bold'
-                      : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Teleport to Nature Parks for Exploration */}
-          <div className="flex items-center gap-1.5 text-xs font-mono">
-            <span className="text-stone-500 hidden md:inline">Scenic Trails:</span>
-            <button
-              onClick={() => handleTeleportPreset('Central Park Ramble', 40.778, -73.971)}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition-colors cursor-pointer"
-            >
-              🌲 Central Park
-            </button>
-            <button
-              onClick={() => handleTeleportPreset('Muir Woods Redwood', 37.897, -122.581)}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition-colors cursor-pointer"
-            >
-              🪵 Muir Woods
-            </button>
-            <button
-              onClick={() => handleTeleportPreset('Yosemite Valley', 37.745, -119.593)}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition-colors cursor-pointer"
-            >
-              ⛰️ Yosemite
-            </button>
-          </div>
+        <div className="flex items-center gap-2 text-[11px] text-stone-400">
+          <span>Steps: <strong className="text-white">{telemetry.stepCount}</strong></span>
+          <span className="text-stone-600">·</span>
+          <span>Dist: <strong className="text-emerald-400">{telemetry.distanceCoveredMeters}m</strong></span>
+          <span className="text-stone-600">·</span>
+          <span>Speed: <strong className="text-white">{telemetry.speedMps} m/s</strong></span>
         </div>
       </div>
     </div>

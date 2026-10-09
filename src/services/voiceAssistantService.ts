@@ -1,9 +1,11 @@
-// Tactical Voice Assistant Service: Powered by ElevenLabs TTS & Google Gemini 3.8 Flash
-// Leads the player through the real-world outdoor expedition via voice interaction and automatic thinking
+// Tactical Voice Assistant Service: Powered by ElevenLabs TTS & Google Gemini Flash
+// Hands-free voice assistant that listens for the wake-word "EcoQuest" and runs quietly in the background
+// Keeps the UI focused on the 3D Character and Tactical Google Map!
 
 import { MovementTelemetry } from './movementTrackingService';
 import { GeneratedMission } from './geminiMissionService';
 import { LocalityWaypoint } from '../types';
+import { hapticFeedback } from '../utils/haptics';
 
 export type VoiceAssistantStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -21,50 +23,166 @@ export interface VoiceAssistantState {
   activeVoiceId: string;
   activeVoiceName: string;
   isMuted: boolean;
+  isWakeWordEnabled: boolean;
   isAutoLeadEnabled: boolean;
+  silenceSecondsRemaining: number; // 0 to 5 countdown
+  inputAudioLevel: number; // 0 to 100 for glowing orb
+  outputAudioLevel: number; // 0 to 100 for speaking pulse
+  audioSourceUsed: string; // 'elevenlabs' | 'gemini-neural-speech' | 'browser-speech'
   lastThought: string;
   lastSpokenText: string;
-  inputAudioLevel: number; // 0 to 100
-  outputAudioLevel: number; // 0 to 100
-  history: AssistantMessage[];
   errorMessage: string | null;
-  audioSourceUsed: string; // 'elevenlabs' | 'gemini-neural-speech' | 'browser-speech'
 }
 
 export type VoiceAssistantActionCallback = (action: string, payload?: any) => void;
 
+// -----------------------------------------------------------------------------
+// ASSISTANT SOUND EFFECTS (Live Mic Active Chimes, Sleep Tone, Processing)
+// Built with Web Audio API for 0 latency, pleasant Apple Siri / Google Assistant fidelity
+// -----------------------------------------------------------------------------
+class AssistantAudioEffects {
+  private ctx: AudioContext | null = null;
+
+  private getAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      if (!this.ctx || this.ctx.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) this.ctx = new AudioCtx();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return this.ctx;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // The Live Mic Active Sound: High-tech, musical dual-tone chime (D5 -> A5)
+  public playWakeChime() {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+
+      // Tone 1: 587.33 Hz (D5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now);
+      gain1.gain.setValueAtTime(0.22, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.12);
+
+      // Tone 2: 880.00 Hz (A5)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880.0, now + 0.09);
+      gain2.gain.setValueAtTime(0.28, now + 0.09);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.09);
+      osc2.stop(now + 0.35);
+    } catch (_) {}
+  }
+
+  // Sleep / Deactivation chime: Soft descending tone (659Hz -> 440Hz)
+  public playSleepChime() {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(659.25, now);
+      osc.frequency.exponentialRampToValueAtTime(440.0, now + 0.18);
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } catch (_) {}
+  }
+
+  // Thinking / Processing chime
+  public playProcessingChime() {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(784.0, now);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.09);
+    } catch (_) {}
+  }
+}
+
+const soundEffects = new AssistantAudioEffects();
+
+// -----------------------------------------------------------------------------
+// VOICE ASSISTANT CORE SERVICE
+// -----------------------------------------------------------------------------
 class VoiceAssistantService {
   private state: VoiceAssistantState = {
     status: 'idle',
     activeVoiceId: 'IKne3meq5aSn9XLyUdCD', // Charlie - Deep, Confident, Energetic (ElevenLabs)
     activeVoiceName: 'Charlie',
     isMuted: false,
+    isWakeWordEnabled: true,
     isAutoLeadEnabled: true,
-    lastThought: 'Ready to lead outdoor expedition.',
-    lastSpokenText: '',
+    silenceSecondsRemaining: 5,
     inputAudioLevel: 0,
     outputAudioLevel: 0,
-    history: [],
-    errorMessage: null,
     audioSourceUsed: 'elevenlabs',
+    lastThought: 'Ready. Say "EcoQuest" or tap the mic.',
+    lastSpokenText: '',
+    errorMessage: null,
   };
 
   private listeners: Set<(state: VoiceAssistantState) => void> = new Set();
   private actionCallbacks: Set<VoiceAssistantActionCallback> = new Set();
 
-  // Audio Playback
+  // Internal Audio Playback
   private currentAudio: HTMLAudioElement | null = null;
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private animFrameId: number | null = null;
 
-  // Speech Recognition (STT)
+  // Speech Recognition (Wake Word + Active Listening)
   private recognition: any = null;
-  private isListeningInternal = false;
+  private isRecognitionActive = false;
+  private isAwakeListening = false; // true = listening for command, false = standby for wake word
+  private silenceTimer: any = null;
+  private countdownInterval: any = null;
+
+  // Microphone Audio Level
   private micStream: MediaStream | null = null;
   private micAudioCtx: AudioContext | null = null;
   private micAnalyser: AnalyserNode | null = null;
   private micAnimFrameId: number | null = null;
+
+  // Context Cache for ongoing session
+  private latestContext: {
+    telemetry?: MovementTelemetry;
+    mission?: GeneratedMission;
+    activeWaypoint?: LocalityWaypoint | null;
+    explorerName?: string;
+  } = {};
 
   // Milestone triggers for auto-coaching
   private lastMilestoneDistance = 0;
@@ -99,17 +217,30 @@ class VoiceAssistantService {
     this.actionCallbacks.forEach((cb) => cb(action, payload));
   }
 
+  public updateContext(context: {
+    telemetry?: MovementTelemetry;
+    mission?: GeneratedMission;
+    activeWaypoint?: LocalityWaypoint | null;
+    explorerName?: string;
+  }) {
+    this.latestContext = { ...this.latestContext, ...context };
+  }
+
   public toggleMute() {
     this.state.isMuted = !this.state.isMuted;
-    if (this.state.isMuted && this.currentAudio) {
-      this.currentAudio.pause();
-      this.state.status = 'idle';
+    if (this.state.isMuted) {
+      this.stopSpeaking();
     }
     this.notify();
   }
 
-  public toggleAutoLead() {
-    this.state.isAutoLeadEnabled = !this.state.isAutoLeadEnabled;
+  public toggleWakeWord() {
+    this.state.isWakeWordEnabled = !this.state.isWakeWordEnabled;
+    if (this.state.isWakeWordEnabled) {
+      this.startWakeWordStandby();
+    } else {
+      this.stopListening();
+    }
     this.notify();
   }
 
@@ -120,12 +251,228 @@ class VoiceAssistantService {
   }
 
   // ---------------------------------------------------------------------------
-  // INTERACTION: USER SAYS OR ASKS SOMETHING
-  // The AI thinks automatically, crafts spoken response, and triggers game actions
+  // SPEECH RECOGNITION WITH WAKE-WORD DETECTION & 5-SECOND AUTO TIMEOUT
+  // ---------------------------------------------------------------------------
+  private initSpeechRecognition() {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      console.warn('[Voice Assistant] Web Speech API not supported in this browser.');
+      return;
+    }
+
+    try {
+      const rec = new SpeechRec();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-US';
+
+      rec.onstart = () => {
+        this.isRecognitionActive = true;
+      };
+
+      rec.onresult = (event: any) => {
+        const lastResult = event.results[event.results.length - 1];
+        if (!lastResult) return;
+        const transcript = (lastResult[0]?.transcript || '').trim();
+        const isFinal = lastResult.isFinal;
+
+        if (!transcript) return;
+
+        // Check for wake word in speech: "ecoquest", "eco quest", "hey ecoquest"
+        const wakeWordRegex = /(?:hey\s+)?(?:eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
+        const hasWakeWord = wakeWordRegex.test(transcript);
+
+        if (hasWakeWord && !this.isAwakeListening) {
+          // WAKE WORD DETECTED!
+          console.log('[Voice Assistant] Wake word "EcoQuest" detected:', transcript);
+          this.handleWakeWordTriggered(transcript);
+          return;
+        }
+
+        // If in active listening mode and we have final speech
+        if (this.isAwakeListening && isFinal) {
+          // Clean wake word if included at start
+          const cleanedText = transcript.replace(wakeWordRegex, '').trim();
+          if (cleanedText.length >= 2) {
+            console.log('[Voice Assistant] Captured user command:', cleanedText);
+            this.clearSilenceTimer();
+            soundEffects.playProcessingChime();
+            this.isAwakeListening = false;
+            this.stopMicAudioCapture();
+            this.interact(cleanedText);
+          }
+        }
+      };
+
+      rec.onerror = (event: any) => {
+        if (event.error === 'no-speech') {
+          // Benign error in continuous mode
+          return;
+        }
+        if (event.error === 'not-allowed') {
+          this.state.errorMessage = 'Mic permission needed for voice assistant';
+          this.notify();
+        }
+      };
+
+      rec.onend = () => {
+        this.isRecognitionActive = false;
+        // Automatically restart standby listening if wake word is enabled and not speaking
+        if (this.state.isWakeWordEnabled && this.state.status !== 'speaking') {
+          setTimeout(() => {
+            this.restartStandbySafely();
+          }, 350);
+        }
+      };
+
+      this.recognition = rec;
+
+      // Start wake word standby automatically
+      if (this.state.isWakeWordEnabled) {
+        setTimeout(() => this.startWakeWordStandby(), 600);
+      }
+    } catch (e) {
+      console.warn('[Voice Assistant] Speech recognition init failed:', e);
+    }
+  }
+
+  private restartStandbySafely() {
+    if (!this.recognition || this.isRecognitionActive || this.state.status === 'speaking') return;
+    try {
+      this.recognition.start();
+    } catch (_) {}
+  }
+
+  public startWakeWordStandby() {
+    if (!this.recognition) return;
+    this.isAwakeListening = false;
+    this.state.status = 'idle';
+    this.state.silenceSecondsRemaining = 5;
+    this.notify();
+    this.restartStandbySafely();
+  }
+
+  // Called when user says "EcoQuest"
+  private handleWakeWordTriggered(rawTranscript: string) {
+    // 1. Play the crisp live mic active chime immediately!
+    soundEffects.playWakeChime();
+    hapticFeedback.radarPulse();
+
+    // 2. Check if a command was already spoken in the same breath
+    const wakeWordRegex = /(?:hey\s+)?(?:eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
+    const commandPart = rawTranscript.replace(wakeWordRegex, '').trim();
+
+    if (commandPart.length >= 3) {
+      // User said: "EcoQuest what should I do?"
+      console.log('[Voice Assistant] Direct command in wake breath:', commandPart);
+      this.clearSilenceTimer();
+      soundEffects.playProcessingChime();
+      this.isAwakeListening = false;
+      this.interact(commandPart);
+      return;
+    }
+
+    // 3. User just said "EcoQuest". Turn on active mic listening with 5-second countdown!
+    this.activateListeningWithTimeout();
+  }
+
+  // Activate active listening (either via "EcoQuest" or mic button tap)
+  public activateListeningWithTimeout() {
+    this.stopSpeaking();
+    this.isAwakeListening = true;
+    this.state.status = 'listening';
+    this.state.silenceSecondsRemaining = 5;
+    this.state.errorMessage = null;
+    this.notify();
+
+    // Play active wake chime & start mic visualizer
+    soundEffects.playWakeChime();
+    this.startMicAudioCapture();
+    this.restartStandbySafely();
+
+    // Start 5-second silence countdown timer
+    this.startSilenceCountdown();
+  }
+
+  private startSilenceCountdown() {
+    this.clearSilenceTimer();
+    let secondsLeft = 5;
+    this.state.silenceSecondsRemaining = secondsLeft;
+    this.notify();
+
+    this.countdownInterval = setInterval(() => {
+      secondsLeft -= 1;
+      this.state.silenceSecondsRemaining = Math.max(0, secondsLeft);
+      this.notify();
+
+      if (secondsLeft <= 0) {
+        this.handleSilenceTimeout();
+      }
+    }, 1000);
+  }
+
+  private handleSilenceTimeout() {
+    console.log('[Voice Assistant] 5s timeout elapsed with no command. Deactivating mic.');
+    this.clearSilenceTimer();
+    this.isAwakeListening = false;
+    this.stopMicAudioCapture();
+
+    // Play gentle sleep chime
+    soundEffects.playSleepChime();
+
+    this.state.status = 'idle';
+    this.state.silenceSecondsRemaining = 5;
+    this.notify();
+
+    // Return to standby wake-word listening
+    this.restartStandbySafely();
+  }
+
+  private clearSilenceTimer() {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+  }
+
+  public toggleListening(context?: any) {
+    if (context) this.updateContext(context);
+
+    if (this.state.status === 'listening') {
+      // User tapped to close
+      this.handleSilenceTimeout();
+    } else {
+      // User tapped to speak
+      this.activateListeningWithTimeout();
+    }
+  }
+
+  public stopListening() {
+    this.clearSilenceTimer();
+    this.isAwakeListening = false;
+    this.stopMicAudioCapture();
+    if (this.recognition && this.isRecognitionActive) {
+      try {
+        this.recognition.stop();
+      } catch (_) {}
+    }
+    this.state.status = 'idle';
+    this.notify();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI INTERACTION (ChatGPT / Gemini Brain + Action Hooks)
+  // Background processing: No giant transcript or thought boxes needed!
   // ---------------------------------------------------------------------------
   public async interact(
     query: string,
-    context?: {
+    contextOverride?: {
       telemetry?: MovementTelemetry;
       mission?: GeneratedMission;
       activeWaypoint?: LocalityWaypoint | null;
@@ -134,17 +481,10 @@ class VoiceAssistantService {
   ): Promise<string> {
     if (!query.trim()) return '';
 
-    // Stop ongoing speech
+    const ctx = { ...this.latestContext, ...contextOverride };
     this.stopSpeaking();
+    this.clearSilenceTimer();
 
-    // Record user message in history
-    const userMsg: AssistantMessage = {
-      id: `usr-${Date.now()}`,
-      role: 'user',
-      text: query.trim(),
-      timestamp: Date.now(),
-    };
-    this.state.history.push(userMsg);
     this.state.status = 'thinking';
     this.state.errorMessage = null;
     this.notify();
@@ -157,65 +497,55 @@ class VoiceAssistantService {
           query: query.trim(),
           guideVoiceId: this.state.activeVoiceId,
           guideName: this.state.activeVoiceName,
-          guideRole: 'Lead Tactical Scout & AI Game Master',
-          telemetry: context?.telemetry || {},
-          mission: context?.mission || {},
-          activeWaypoint: context?.activeWaypoint || null,
-          history: this.state.history.slice(-6).map((m) => ({
-            role: m.role,
-            text: m.text,
-          })),
+          guideRole: 'Lead Tactical Scout & AI Companion',
+          telemetry: ctx.telemetry || {},
+          mission: ctx.mission || {},
+          activeWaypoint: ctx.activeWaypoint || null,
         }),
       });
 
       const data = await response.json();
-      const thought = data.thought || 'Analyzed explorer question and guided their next outdoor step.';
-      const spokenText = data.spokenText || data.response || 'Understood, Explorer. Keep moving forward!';
+      const thought = data.thought || 'Guiding explorer with clear outdoor direction.';
+      const spokenText = data.spokenText || data.response || "Copy that! Check your map and let's keep moving!";
       const action = data.action || 'NONE';
 
       this.state.lastThought = thought;
       this.state.lastSpokenText = spokenText;
 
-      const assistantMsg: AssistantMessage = {
-        id: `asst-${Date.now()}`,
-        role: 'assistant',
-        text: spokenText,
-        thought,
-        action,
-        timestamp: Date.now(),
-      };
-      this.state.history.push(assistantMsg);
-
-      // Trigger any game action (e.g. SHOW_LOCATION, COMPLETE_TASK, NEXT_TASK, POCKET_MODE)
+      // Trigger map/game actions in background
       if (action && action !== 'NONE') {
-        this.triggerAction(action, { query, context });
+        this.triggerAction(action, { query, context: ctx });
       }
 
-      // Synthesize and speak response
+      // Speak answer through earphones/audio
       if (!this.state.isMuted) {
         await this.speak(spokenText);
       } else {
         this.state.status = 'idle';
         this.notify();
+        this.startWakeWordStandby();
       }
 
       return spokenText;
     } catch (err: any) {
-      console.error('[Voice Assistant] Interaction error:', err);
-      const fallbackText = "Copy that Explorer! Check your tactical map and let's keep moving towards the objective.";
-      this.state.lastThought = 'Handling transient error with encouraging tactical fallback.';
+      console.warn('[Voice Assistant] Interaction error:', err);
+      const fallbackText = "I'm with you! Keep an eye on your trail and let's find the next craft item.";
+      this.state.lastThought = 'Graceful conversational fallback.';
       this.state.lastSpokenText = fallbackText;
-      this.state.status = 'idle';
-      this.notify();
       if (!this.state.isMuted) {
-        this.speak(fallbackText);
+        await this.speak(fallbackText);
+      } else {
+        this.state.status = 'idle';
+        this.notify();
+        this.startWakeWordStandby();
       }
       return fallbackText;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // SPEECH SYNTHESIS (ELEVENLABS TTS -> GEMINI NEURAL TTS -> BROWSER TTS)
+  // SPEECH SYNTHESIS (ELEVENLABS TTS -> ULTRA-NATURAL BROWSER SYNTHESIS)
+  // Ensures natural human cadence, zero robotic drone!
   // ---------------------------------------------------------------------------
   public async speak(text: string): Promise<void> {
     if (!text.trim() || this.state.isMuted) return;
@@ -248,12 +578,11 @@ class VoiceAssistantService {
         return;
       }
 
-      // If server returned JSON fallback
-      console.warn('[Voice Assistant] Server suggested browser speech fallback');
-      this.speakWithBrowserSynth(text);
+      // Fallback to high-definition human browser speech
+      await this.speakWithNaturalBrowserSynth(text);
     } catch (err: any) {
-      console.warn('[Voice Assistant] Speech fetch error, trying browser synthesis:', err);
-      this.speakWithBrowserSynth(text);
+      console.warn('[Voice Assistant] Speech fetch error, falling back to natural speech:', err);
+      await this.speakWithNaturalBrowserSynth(text);
     }
   }
 
@@ -263,23 +592,8 @@ class VoiceAssistantService {
         const audio = new Audio(url);
         this.currentAudio = audio;
 
-        // Setup Web Audio Analyser for live visualizer wave
-        try {
-          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioCtx) {
-            const ctx = new AudioCtx();
-            this.audioCtx = ctx;
-            const source = ctx.createMediaElementSource(audio);
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 64;
-            source.connect(analyser);
-            analyser.connect(ctx.destination);
-            this.analyser = analyser;
-            this.startOutputVisualizerLoop();
-          }
-        } catch (_) {
-          // Fallback visualizer if MediaElementSource cross-origin or already hooked
-        }
+        // Visualizer wave loop
+        this.startOutputVisualizerLoop();
 
         audio.onended = () => {
           this.stopOutputVisualizerLoop();
@@ -288,6 +602,7 @@ class VoiceAssistantService {
           this.state.status = 'idle';
           this.state.outputAudioLevel = 0;
           this.notify();
+          this.startWakeWordStandby();
           resolve();
         };
 
@@ -298,70 +613,125 @@ class VoiceAssistantService {
           this.state.status = 'idle';
           this.state.outputAudioLevel = 0;
           this.notify();
+          this.startWakeWordStandby();
           resolve();
         };
 
-        audio.play().catch((playErr) => {
-          console.warn('[Voice Assistant] Audio play was prevented by browser policy:', playErr);
+        audio.play().catch(() => {
+          this.stopOutputVisualizerLoop();
           this.state.status = 'idle';
           this.notify();
+          this.startWakeWordStandby();
           resolve();
         });
-      } catch (e) {
+      } catch (_) {
         this.state.status = 'idle';
         this.notify();
+        this.startWakeWordStandby();
         resolve();
       }
     });
   }
 
-  private speakWithBrowserSynth(text: string) {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      this.state.status = 'idle';
-      this.notify();
-      return;
-    }
-
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 0.95;
-
-      // Select natural English voice if present
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(
-        (v) =>
-          v.name.includes('Australian') ||
-          v.name.includes('Natural') ||
-          v.name.includes('English')
-      );
-      if (preferred) {
-        utterance.voice = preferred;
+  // Ultra-natural human speech synthesis engine
+  // Carefully picks top-grade Natural/Neural voices to avoid robotic tones
+  private speakWithNaturalBrowserSynth(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        this.state.status = 'idle';
+        this.notify();
+        this.startWakeWordStandby();
+        resolve();
+        return;
       }
 
-      this.state.audioSourceUsed = 'browser-speech';
+      try {
+        window.speechSynthesis.cancel();
 
-      utterance.onstart = () => {
-        this.state.status = 'speaking';
-        this.notify();
-      };
+        // Clean text of symbols/markdown for warm human delivery
+        const cleanSpoken = text
+          .replace(/[*_#`~[\]()]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
 
-      utterance.onend = () => {
+        const utterance = new SpeechSynthesisUtterance(cleanSpoken);
+        utterance.rate = 1.0; // Natural conversational tempo
+        utterance.pitch = 1.0; // Natural pitch
+        utterance.volume = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+
+        // 1. Natural / Neural online voices (Edge & Chrome Natural voices)
+        const naturalVoice = voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') || v.name.includes('Online'))
+        );
+
+        // 2. Google High Quality US/UK voices
+        const googleVoice = voices.find(
+          (v) =>
+            (v.name.includes('Google US English') ||
+              v.name.includes('Google UK English') ||
+              v.name.includes('Google')) &&
+            v.lang.startsWith('en')
+        );
+
+        // 3. Apple Siri / Samantha / Daniel / Karen voices
+        const appleVoice = voices.find(
+          (v) =>
+            (v.name.includes('Siri') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('Daniel') ||
+              v.name.includes('Karen') ||
+              v.name.includes('Oliver')) &&
+            v.lang.startsWith('en')
+        );
+
+        const chosenVoice = naturalVoice || googleVoice || appleVoice || voices.find((v) => v.lang.startsWith('en'));
+        if (chosenVoice) {
+          utterance.voice = chosenVoice;
+        }
+
+        this.state.audioSourceUsed = 'browser-speech';
+
+        // Fake pulse for waveform while browser speaking
+        let synthPulseInterval: any = setInterval(() => {
+          this.state.outputAudioLevel = Math.floor(35 + Math.random() * 55);
+          this.notify();
+        }, 120);
+
+        utterance.onstart = () => {
+          this.state.status = 'speaking';
+          this.notify();
+        };
+
+        utterance.onend = () => {
+          clearInterval(synthPulseInterval);
+          this.state.outputAudioLevel = 0;
+          this.state.status = 'idle';
+          this.notify();
+          this.startWakeWordStandby();
+          resolve();
+        };
+
+        utterance.onerror = () => {
+          clearInterval(synthPulseInterval);
+          this.state.outputAudioLevel = 0;
+          this.state.status = 'idle';
+          this.notify();
+          this.startWakeWordStandby();
+          resolve();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (_) {
         this.state.status = 'idle';
         this.notify();
-      };
-
-      utterance.onerror = () => {
-        this.state.status = 'idle';
-        this.notify();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } catch (_) {
-      this.state.status = 'idle';
-      this.notify();
-    }
+        this.startWakeWordStandby();
+        resolve();
+      }
+    });
   }
 
   public stopSpeaking() {
@@ -394,108 +764,7 @@ class VoiceAssistantService {
   }
 
   // ---------------------------------------------------------------------------
-  // SPEECH RECOGNITION (MIC LISTENING)
-  // ---------------------------------------------------------------------------
-  private initSpeechRecognition() {
-    if (typeof window === 'undefined') return;
-
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-
-    try {
-      const rec = new SpeechRec();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = 'en-US';
-
-      rec.onstart = () => {
-        this.isListeningInternal = true;
-        this.state.status = 'listening';
-        this.state.errorMessage = null;
-        this.notify();
-      };
-
-      rec.onresult = (event: any) => {
-        const transcript = event.results?.[0]?.[0]?.transcript;
-        if (transcript) {
-          console.log('[Voice Assistant] Recognized user speech:', transcript);
-          this.interact(transcript);
-        }
-      };
-
-      rec.onerror = (event: any) => {
-        console.warn('[Voice Assistant] Speech recognition event:', event.error);
-        this.isListeningInternal = false;
-        this.stopMicAudioCapture();
-        if (event.error !== 'no-speech') {
-          this.state.errorMessage = `Microphone: ${event.error}`;
-        }
-        this.state.status = 'idle';
-        this.notify();
-      };
-
-      rec.onend = () => {
-        this.isListeningInternal = false;
-        this.stopMicAudioCapture();
-        if (this.state.status === 'listening') {
-          this.state.status = 'idle';
-        }
-        this.notify();
-      };
-
-      this.recognition = rec;
-    } catch (e) {
-      console.warn('[Voice Assistant] Could not initialize Web Speech API:', e);
-    }
-  }
-
-  public async startListening(context?: {
-    telemetry?: MovementTelemetry;
-    mission?: GeneratedMission;
-    activeWaypoint?: LocalityWaypoint | null;
-  }) {
-    this.stopSpeaking();
-
-    // Start mic waveform capture
-    await this.startMicAudioCapture();
-
-    if (this.recognition) {
-      try {
-        this.recognition.start();
-        return;
-      } catch (err) {
-        // Recognition might already be running
-      }
-    }
-
-    // Fallback if SpeechRecognition not supported in browser:
-    this.state.status = 'listening';
-    this.notify();
-  }
-
-  public stopListening() {
-    if (this.recognition && this.isListeningInternal) {
-      try {
-        this.recognition.stop();
-      } catch (_) {}
-    }
-    this.stopMicAudioCapture();
-    if (this.state.status === 'listening') {
-      this.state.status = 'idle';
-    }
-    this.notify();
-  }
-
-  public toggleListening(context?: any) {
-    if (this.state.status === 'listening') {
-      this.stopListening();
-    } else {
-      this.startListening(context);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // AUDIO VISUALIZERS (INPUT MIC & OUTPUT VOICE WAVEFORMS)
+  // VISUALIZERS (MIC & VOICE WAVEFORMS)
   // ---------------------------------------------------------------------------
   private async startMicAudioCapture() {
     try {
@@ -521,15 +790,13 @@ class VoiceAssistantService {
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
           const avg = sum / dataArray.length;
-          this.state.inputAudioLevel = Math.min(100, Math.round(avg * 1.6));
+          this.state.inputAudioLevel = Math.min(100, Math.round(avg * 1.8));
           this.notify();
           this.micAnimFrameId = requestAnimationFrame(loop);
         };
         loop();
       }
-    } catch (_) {
-      // Permission denied or not available
-    }
+    } catch (_) {}
   }
 
   private stopMicAudioCapture() {
@@ -552,15 +819,10 @@ class VoiceAssistantService {
   }
 
   private startOutputVisualizerLoop() {
-    if (!this.analyser) return;
-    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    // Generate pulse loop
     const loop = () => {
-      if (!this.analyser || this.state.status !== 'speaking') return;
-      this.analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-      const avg = sum / dataArray.length;
-      this.state.outputAudioLevel = Math.min(100, Math.round(avg * 1.8));
+      if (this.state.status !== 'speaking') return;
+      this.state.outputAudioLevel = Math.floor(40 + Math.random() * 55);
       this.notify();
       this.animFrameId = requestAnimationFrame(loop);
     };
@@ -572,90 +834,38 @@ class VoiceAssistantService {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
-    if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      try {
-        this.audioCtx.close();
-      } catch (_) {}
-      this.audioCtx = null;
-    }
-    this.analyser = null;
+    this.state.outputAudioLevel = 0;
   }
 
   // ---------------------------------------------------------------------------
-  // PROACTIVE GAME COACHING (LEADS THE MISSION AUTOMATICALLY)
+  // PROACTIVE COACHING
   // ---------------------------------------------------------------------------
   public announceExpeditionStart(mission: GeneratedMission, explorerName: string = 'Explorer') {
-    const text = `G'day ${explorerName}! I'm Charlie, your Tactical Scout Leader. Today's mission is ${mission.title}. We need ${mission.scavengerItems.slice(0, 2).join(' and ')}. Start walking forward along your path, and keep your eyes on the ground!`;
-    this.state.lastThought = `Welcoming ${explorerName} to ${mission.title} with energized opening briefing.`;
+    const text = `Hey ${explorerName}! I'm Charlie, your field guide. Today we're tracking items for ${mission.title}. Start walking along your path, and say "EcoQuest" whenever you need guidance!`;
+    this.state.lastThought = `Expedition briefing for ${mission.title}.`;
     this.state.lastSpokenText = text;
-    this.state.history.push({
-      id: `asst-init-${Date.now()}`,
-      role: 'assistant',
-      text,
-      thought: this.state.lastThought,
-      action: 'EXPEDITION_START',
-      timestamp: Date.now(),
-    });
-    this.notify();
-    this.speak(text);
-  }
-
-  public announceCraftReady(mission: GeneratedMission) {
-    const text = `Crafting site reached! Clear a spot on the soil and arrange your items: ${mission.craftInstructions}. Once it looks glorious, tap 'Snap Photo' to verify!`;
-    this.state.lastThought = 'Guiding final tactile craft assembly on the soil.';
-    this.state.lastSpokenText = text;
-    this.state.history.push({
-      id: `asst-craft-${Date.now()}`,
-      role: 'assistant',
-      text,
-      thought: this.state.lastThought,
-      action: 'CRAFT_READY',
-      timestamp: Date.now(),
-    });
     this.notify();
     this.speak(text);
   }
 
   public announceCraftVerified(craftName: string, xp: number) {
-    const text = `Spectacular work, Explorer! The ${craftName} has been verified and added to your Codex. You earned ${xp} XP!`;
-    this.state.lastThought = 'Celebrating verified nature craft in Codex.';
+    const text = `Outstanding work! The ${craftName} has been verified and added to your Codex. You earned ${xp} XP!`;
+    this.state.lastThought = 'Celebrating verified craft.';
     this.state.lastSpokenText = text;
-    this.state.history.push({
-      id: `asst-praise-${Date.now()}`,
-      role: 'assistant',
-      text,
-      thought: this.state.lastThought,
-      action: 'CRAFT_VERIFIED',
-      timestamp: Date.now(),
-    });
     this.notify();
     this.speak(text);
   }
 
-  // Telemetry event hook: Proactively coaches user as they cover real-world distance
-  public onMovementTelemetry(
-    telemetry: MovementTelemetry,
-    mission: GeneratedMission
-  ) {
+  public onMovementTelemetry(telemetry: MovementTelemetry, mission: GeneratedMission) {
+    this.updateContext({ telemetry, mission });
     if (!this.state.isAutoLeadEnabled || this.state.isMuted) return;
     const now = Date.now();
-    // Throttle automatic commentary to once every 45 seconds minimum
-    if (now - this.lastSpokenTimestamp < 45000) return;
+    if (now - this.lastSpokenTimestamp < 50000) return;
 
     const distance = telemetry.distanceCoveredMeters || 0;
-
-    // Milestone 1: 50 meters
-    if (distance >= 50 && this.lastMilestoneDistance < 50) {
-      this.lastMilestoneDistance = 50;
-      this.interact('I have walked 50 meters forward', { telemetry, mission });
-      return;
-    }
-
-    // Milestone 2: 120 meters
-    if (distance >= 120 && this.lastMilestoneDistance < 120) {
-      this.lastMilestoneDistance = 120;
-      this.interact('I have reached 120 meters on the trail', { telemetry, mission });
-      return;
+    if (distance >= 60 && this.lastMilestoneDistance < 60) {
+      this.lastMilestoneDistance = 60;
+      this.interact('I have walked 60 meters forward');
     }
   }
 }
