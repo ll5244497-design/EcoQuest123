@@ -34,7 +34,6 @@ import {
   movementTrackingService,
   MovementTelemetry,
 } from '../services/movementTrackingService';
-import { LocalityWaypoint } from '../types';
 import { hapticFeedback } from '../utils/haptics';
 import { TacticalGoogleMap } from './TacticalGoogleMap';
 import { getCurrentGreeting } from '../utils/timeGreeting';
@@ -111,83 +110,6 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
     });
     return () => unsub();
   }, [setIsWalking]);
-
-  // GPS Nature Waypoints for Locality Google Map
-  const [localWaypoints, setLocalWaypoints] = useState<LocalityWaypoint[]>([]);
-  const [activeWaypoint, setActiveWaypoint] = useState<LocalityWaypoint | null>(null);
-
-  const liveWaypoints = React.useMemo(() => {
-    return localWaypoints.map((wp) => {
-      const R = 6371e3;
-      const p1 = (telemetry.latitude * Math.PI) / 180;
-      const p2 = (wp.lat * Math.PI) / 180;
-      const dp = ((wp.lat - telemetry.latitude) * Math.PI) / 180;
-      const dl = ((wp.lng - telemetry.longitude) * Math.PI) / 180;
-      const a =
-        Math.sin(dp / 2) ** 2 +
-        Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const dist = Math.round(R * c);
-      return {
-        ...wp,
-        distanceMeters: dist,
-      };
-    });
-  }, [localWaypoints, telemetry.latitude, telemetry.longitude]);
-
-  useEffect(() => {
-    const baseLat = telemetry.latitude || 37.7749;
-    const baseLng = telemetry.longitude || -122.4194;
-
-    const initialWaypoints: LocalityWaypoint[] = [
-      {
-        id: 'wp-dragon-1',
-        name: 'Broad Fallen Leaves Cache',
-        category: 'Botanical',
-        description: 'Look beneath shaded oak or maple canopy for broad fallen leaves.',
-        audioPrompt: 'Find two broad fallen leaves on the ground for your craft dragon wings.',
-        lat: baseLat + 0.0006,
-        lng: baseLng + 0.0008,
-        icon: '🍃',
-        completed: false,
-        distanceMeters: 75,
-      },
-      {
-        id: 'wp-dragon-2',
-        name: 'Curved Twig Haven',
-        category: 'Canopy',
-        description: 'Search near fallen branches for a sturdy, curved dry twig.',
-        audioPrompt: 'Pick up one curved twig about the length of your hand for the dragon spine.',
-        lat: baseLat - 0.0005,
-        lng: baseLng + 0.0007,
-        icon: '🪵',
-        completed: false,
-        distanceMeters: 60,
-      },
-      {
-        id: 'wp-dragon-3',
-        name: 'Polished River Pebbles',
-        category: 'Geo',
-        description: 'Locate two smooth round pebbles on the path.',
-        audioPrompt: 'Gather two smooth pebbles from the soil to serve as glowing dragon eyes.',
-        lat: baseLat + 0.0003,
-        lng: baseLng - 0.0009,
-        icon: '🪨',
-        completed: false,
-        distanceMeters: 90,
-      },
-    ];
-
-    setLocalWaypoints(initialWaypoints);
-    setActiveWaypoint(initialWaypoints[0]);
-  }, [telemetry.isGpsActive]);
-
-  const handleWaypointCompleted = (id: string) => {
-    setLocalWaypoints((prev) =>
-      prev.map((wp) => (wp.id === id ? { ...wp, completed: true } : wp))
-    );
-    setTotalXp((prev) => prev + 150);
-  };
 
   // Active Outdoor Mission
   const [activeMission, setActiveMission] = useState<GeneratedMission>({
@@ -277,11 +199,11 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
   };
 
   return (
-    <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 select-none font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="relative z-10 w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 select-none font-['Plus_Jakarta_Sans',sans-serif]">
       {/* =========================================================================
           1. TIME-OF-DAY WELCOME BANNER (PROMINENT GREETING)
           ========================================================================= */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-stone-100/95 border border-stone-300/80 shadow-[0_4px_0_0_#d6d3d1] flex flex-wrap items-center justify-between gap-4">
+      <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-stone-100/95 border border-stone-300/80 shadow-[0_4px_0_0_#d6d3d1] flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-800 uppercase tracking-wider">
             <span>{timeGreeting.emoji}</span>
@@ -289,7 +211,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
             <span className="text-stone-400">·</span>
             <span className="text-stone-600 font-mono">{timeGreeting.clockTime}</span>
           </div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-display font-extrabold text-stone-900 tracking-tight">
+          <h1 className="text-lg sm:text-2xl lg:text-3xl font-display font-extrabold text-stone-900 tracking-tight leading-tight">
             {timeGreeting.salutation},{' '}
             <span className="text-emerald-800 underline decoration-emerald-500/60 decoration-2 underline-offset-4">
               {explorerName.trim() ? explorerName : 'Explorer'}
@@ -302,15 +224,15 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         </div>
 
         {/* Compact Right Dock: Progress + Small Audio Control */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Level & XP Capsule */}
-          <div className="px-3 py-1.5 rounded-xl bg-stone-200/90 border border-stone-300 font-mono text-xs flex items-center gap-2 text-stone-800 shadow-xs">
+          <div className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-stone-200/90 border border-stone-300 font-mono text-xs flex items-center gap-1.5 sm:gap-2 text-stone-800 shadow-xs">
             <span className="font-bold">Stage {currentLevel}/7</span>
             <span className="text-stone-400">·</span>
             <span className="font-bold text-emerald-800 tabular-nums">{totalXp} XP</span>
           </div>
 
-          {/* Minimal Discreet Ambient Audio Toggle (Small & Unobtrusive) */}
+          {/* Minimal Discreet Ambient Audio Toggle */}
           <button
             onClick={() => {
               hapticFeedback.tactileClick();
@@ -329,38 +251,38 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
           {/* Pocket Mode Actuator */}
           <button
             onClick={onOpenPocketMode}
-            className="px-3 py-1.5 rounded-xl bg-stone-200/90 hover:bg-stone-300 text-stone-800 font-mono text-xs font-bold border border-stone-300/80 shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-stone-200/90 hover:bg-stone-300 text-stone-800 font-mono text-xs font-bold border border-stone-300/80 shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">POCKET</span>
+            <span className="text-[11px] sm:text-xs">POCKET</span>
           </button>
         </div>
       </div>
 
       {/* =========================================================================
           2. CORE MISSION EXPEDITION DECK: 3D CHARACTER + TACTICAL GOOGLE MAP
-          Both the 3D Character and Map are prominently featured side-by-side!
+          Both the 3D Character and Tactical Map are cleanly presented!
           ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-stretch">
         {/* Left Deck: 3D Character Viewport */}
         <div className="flex flex-col rounded-3xl overflow-hidden bg-stone-100/95 border border-stone-300/80 shadow-[0_4px_0_0_#d6d3d1]">
           {/* Card Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-300/70 bg-stone-200/60">
+          <div className="flex items-center justify-between px-3.5 sm:px-4 py-3 border-b border-stone-300/70 bg-stone-200/60">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
               <h3 className="font-display font-extrabold text-sm sm:text-base text-stone-900 tracking-tight">
                 3D Human Explorer Avatar
               </h3>
             </div>
-            <div className="flex items-center gap-2 text-[11px] font-mono text-stone-600">
-              <span className="px-2 py-0.5 rounded-md bg-stone-300/80 font-bold text-stone-800">
+            <div className="flex items-center gap-2 text-[11px] font-mono">
+              <span className="px-2.5 py-0.5 rounded-md bg-stone-300/90 font-bold text-stone-800">
                 {isWalking ? '🏃 WALKING' : '🛑 STATIONARY'}
               </span>
             </div>
           </div>
 
           {/* 3D WebGL Canvas */}
-          <div className="relative w-full h-[320px] sm:h-[380px] bg-stone-200/40">
+          <div className="relative w-full flex-1 min-h-[300px] sm:min-h-[380px] bg-stone-200/40">
             <CharacterCanvas
               gender="male"
               isWalking={isWalking}
@@ -370,57 +292,25 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
 
           {/* Card Footer */}
           <div className="p-3 bg-stone-200/50 border-t border-stone-300/70 flex items-center justify-between text-xs font-mono">
-            <div className="text-stone-700 flex items-center gap-1.5">
-              <span>Nicolás Martins Streetwear Avatar</span>
+            <div className="text-stone-700 flex items-center gap-1.5 truncate font-medium">
+              <span>Nicolás Martins · Codename: {explorerName || 'Ranger'}</span>
             </div>
             <button
               onClick={onBackToCharacterSelect}
-              className="text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer"
+              className="text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer shrink-0 ml-2"
             >
               Customizer ↗
             </button>
           </div>
         </div>
 
-        {/* Right Deck: Tactical Google Map & Live GPS Radar */}
-        <div className="flex flex-col rounded-3xl overflow-hidden bg-stone-100/95 border border-stone-300/80 shadow-[0_4px_0_0_#d6d3d1]">
-          {/* Card Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-300/70 bg-stone-200/60">
-            <div className="flex items-center gap-2">
-              <Compass className="w-4 h-4 text-emerald-700" />
-              <h3 className="font-display font-extrabold text-sm sm:text-base text-stone-900 tracking-tight">
-                Tactical Google Map & GPS Radar
-              </h3>
-            </div>
-            <button
-              onClick={() => movementTrackingService.requestCurrentLocation()}
-              className="px-2 py-0.5 rounded-md bg-emerald-800 text-stone-50 font-mono text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
-            >
-              REFRESH GPS
-            </button>
-          </div>
-
-          {/* Google Map Layer */}
-          <div className="relative w-full h-[320px] sm:h-[380px] bg-stone-900">
-            <TacticalGoogleMap
-              telemetry={telemetry}
-              waypoints={liveWaypoints}
-              activeWaypoint={activeWaypoint}
-              onSelectWaypoint={setActiveWaypoint}
-              explorerName={explorerName}
-            />
-          </div>
-
-          {/* Card Footer */}
-          <div className="p-3 bg-stone-200/50 border-t border-stone-300/70 flex items-center justify-between text-xs font-mono">
-            <div className="text-stone-700 flex items-center gap-1.5 truncate">
-              <Radio className="w-3.5 h-3.5 text-emerald-600 shrink-0 animate-pulse" />
-              <span className="truncate">{telemetry.localityName || 'Outdoor Field Sector'}</span>
-            </div>
-            <span className="text-stone-500 shrink-0 tabular-nums">
-              ±{Math.round(telemetry.accuracy || 5)}m GPS
-            </span>
-          </div>
+        {/* Right Deck: Tactical Google Map (Clean, waypoint radar removed) */}
+        <div className="flex flex-col">
+          <TacticalGoogleMap
+            telemetry={telemetry}
+            waypoints={[]}
+            explorerName={explorerName}
+          />
         </div>
       </div>
 

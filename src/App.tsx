@@ -255,36 +255,33 @@ export default function App() {
       <NatureTopoBackground />
 
       {/* =========================================================================
-          TOP BAR: STRICT 3-ZONE LAYOUT (BRAND · UNIFIED NAV BAR · ACTION)
-          Now features seamless direct navigation for:
-          01. EXPLORER | 02. MISSION | 03. DAILY CHALLENGES | 04. MY STICKERS
+          TOP BAR: STRICT CLEAN 3-ZONE LAYOUT (BRAND · DESKTOP NAV · ACTION)
           ========================================================================= */}
-      <header className="relative z-40 sticky top-0 bg-[#ebeae5]/90 backdrop-blur-md border-b border-stone-300/80 shadow-xs select-none">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <header className="sticky top-0 z-40 bg-[#ebeae5]/90 backdrop-blur-md border-b border-stone-300/80 shadow-xs select-none">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           {/* Zone 1: Wordmark */}
           <div
             onClick={() => {
               hapticFeedback.tactileClick();
               setCurrentPage('welcome');
             }}
-            className="flex items-center gap-2.5 cursor-pointer group shrink-0"
+            className="flex items-center gap-2 cursor-pointer group shrink-0"
           >
             <div className="w-8 h-8 rounded-xl bg-stone-900 text-emerald-400 flex items-center justify-center font-display font-black text-sm shadow-xs group-hover:bg-emerald-950 transition-colors">
               EQ
             </div>
             <div className="flex flex-col">
-              <span className="font-display font-extrabold text-base tracking-tight text-stone-900 leading-tight">
+              <span className="font-display font-extrabold text-sm sm:text-base tracking-tight text-stone-900 leading-tight">
                 ECOQUEST
               </span>
-              <span className="text-[9px] font-mono font-bold text-emerald-800 tracking-wider uppercase">
+              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-emerald-800 tracking-wider uppercase">
                 AI FIELD OPS
               </span>
             </div>
           </div>
 
-          {/* Zone 2: Proper Clean Aligned Navigation Bar */}
-          <nav className="flex items-center gap-1 p-1 bg-stone-200/90 rounded-2xl text-xs font-mono border border-stone-300/80 shadow-inner overflow-x-auto max-w-[calc(100vw-220px)] sm:max-w-none">
-            {/* 01. EXPLORER (Character Selection & Setup) */}
+          {/* Desktop Navigation Tabs (Visible on lg+, 1024px+) */}
+          <nav className="hidden lg:flex items-center gap-1 p-1 bg-stone-200/90 rounded-2xl text-xs font-mono border border-stone-300/80 shadow-inner">
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -300,7 +297,6 @@ export default function App() {
               <span>EXPLORER</span>
             </button>
 
-            {/* 02. MISSION (Active 3D Character & Tactical Map) */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -316,7 +312,6 @@ export default function App() {
               <span>MISSION</span>
             </button>
 
-            {/* 03. DAILY CHALLENGES */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -341,7 +336,6 @@ export default function App() {
               </span>
             </button>
 
-            {/* 04. MY STICKERS */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -366,7 +360,6 @@ export default function App() {
               </span>
             </button>
 
-            {/* 05. BIO CARDS */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -382,7 +375,6 @@ export default function App() {
               <span>BIO CARDS</span>
             </button>
 
-            {/* 06. BLUEPRINT */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
@@ -399,14 +391,14 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: Clean Aligned Utility Controls */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right Utilities (Soundtrack + Intro + Pocket) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <SoothingSoundtrackHUD />
 
             <button
               onClick={handleReplayIntro}
               title="Replay Welcome Intro Animation"
-              className="h-9 px-2.5 bg-stone-200/90 hover:bg-stone-300 text-stone-700 text-xs font-mono font-bold rounded-xl transition-colors border border-stone-300 shadow-xs cursor-pointer flex items-center gap-1"
+              className="h-8 sm:h-9 px-2 sm:px-2.5 bg-stone-200/90 hover:bg-stone-300 text-stone-700 text-xs font-mono font-bold rounded-xl transition-colors border border-stone-300 shadow-xs cursor-pointer flex items-center gap-1"
             >
               <RotateCcw className="w-3.5 h-3.5 text-stone-600" />
               <span className="hidden xl:inline text-[11px]">INTRO</span>
@@ -418,10 +410,10 @@ export default function App() {
                 setIsPocketModalOpen(true);
               }}
               title="Open AMOLED Pocket Mode"
-              className="h-9 px-3 bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-mono font-bold rounded-xl transition-colors border-t border-stone-700/40 shadow-xs active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="h-8 sm:h-9 px-2.5 sm:px-3 bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-mono font-bold rounded-xl transition-colors border-t border-stone-700/40 shadow-xs active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">POCKET</span>
+              <span className="text-[11px] sm:text-xs">POCKET</span>
             </button>
           </div>
         </div>
@@ -431,9 +423,9 @@ export default function App() {
           PAGE 1: WELCOME & CHARACTER SELECT (THE USER'S BELOVED PAGE)
           ========================================================================= */}
       {currentPage === 'welcome' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)] flex flex-col justify-between p-4 sm:p-8 lg:p-12">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] flex flex-col justify-between p-3 sm:p-6 lg:p-10 pb-24 lg:pb-10">
           {/* Typographic Intro with Dynamic Time-of-Day Welcome Greeting */}
-          <div className="max-w-3xl mx-auto text-center space-y-3 select-none">
+          <div className="max-w-3xl mx-auto text-center space-y-2.5 select-none">
             {/* Dynamic Real-Time Banner Pill */}
             <div
               className={`inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 rounded-2xl bg-stone-200/90 border border-stone-300 shadow-sm text-xs font-mono transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
@@ -465,7 +457,7 @@ export default function App() {
               </div>
 
               <h1
-                className={`text-3xl sm:text-5xl lg:text-7xl font-display font-extrabold text-stone-900 tracking-tight leading-[1.05] mt-1 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                className={`text-3xl sm:text-5xl lg:text-6xl font-display font-extrabold text-stone-900 tracking-tight leading-[1.05] mt-1 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                   introAnimated
                     ? 'translate-y-0 opacity-100'
                     : 'translate-y-full opacity-0'
@@ -488,32 +480,30 @@ export default function App() {
             </div>
           </div>
 
-          {/* Explorer Avatar Status Badge (Male Nicolás 3D Only) */}
-          <div className="w-full max-w-md mx-auto my-2 z-20 px-2">
-            <div className="flex items-center justify-between p-2.5 sm:p-3 bg-stone-200/90 backdrop-blur-md rounded-2xl border border-stone-300 shadow-inner">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-stone-900 text-emerald-400 flex items-center justify-center font-black text-sm shadow-xs">
+          {/* 3D Character Viewport Stage: Single framed card without loose overlapping badges */}
+          <div className="w-full max-w-2xl mx-auto my-2 sm:my-3 rounded-3xl overflow-hidden bg-stone-100/90 border border-stone-300/80 shadow-[0_4px_0_0_#d6d3d1]">
+            {/* Card Header */}
+            <div className="flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-stone-300/70 bg-stone-200/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-stone-900 text-emerald-400 flex items-center justify-center font-black text-xs shadow-xs">
                   ♂
                 </div>
                 <div>
                   <div className="font-mono text-xs font-bold text-stone-900 tracking-wide">
-                    3D HUMAN EXPLORER
+                    Nicolás Martins · 3D Human Explorer
                   </div>
-                  <div className="text-[11px] font-mono text-stone-600">
-                    Nicolás Martins · Authentic Rigged Avatar
+                  <div className="text-[10px] font-mono text-stone-600">
+                    Rigged Interactive Avatar · 360° Inspection
                   </div>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-800 text-stone-50 text-[10px] font-mono font-bold uppercase tracking-wider">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-800 text-stone-50 text-[10px] font-mono font-bold uppercase tracking-wider">
                 READY
               </span>
             </div>
-          </div>
 
-          {/* 3D Character Viewport Stage */}
-          <div className="relative w-full max-w-4xl h-[380px] sm:h-[450px] lg:h-[520px] mx-auto my-1 sm:my-2 flex items-center justify-center">
-            {/* Centered 3D WebGL Canvas */}
-            <div className="w-full h-full">
+            {/* 3D WebGL Canvas */}
+            <div className="relative w-full h-[280px] sm:h-[380px] md:h-[420px] bg-stone-200/40">
               <CharacterCanvas
                 gender="male"
                 isWalking={false}
@@ -524,7 +514,7 @@ export default function App() {
 
           {/* Bottom Explorer Deck & Launch Actuator */}
           <div
-            className={`max-w-md w-full mx-auto space-y-3 pt-2 transition-all duration-700 delay-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            className={`max-w-md w-full mx-auto space-y-3 pt-1 transition-all duration-700 delay-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
               introAnimated ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
             }`}
           >
@@ -546,7 +536,7 @@ export default function App() {
                 setCurrentPage('playing');
                 ambientAudioService.start();
               }}
-              className="relative w-full py-3.5 sm:py-4 px-6 bg-stone-900 hover:bg-stone-800 active:bg-stone-900 text-stone-50 font-display font-bold text-base rounded-2xl transition-all border-t border-stone-600/50 shadow-[0_6px_0_0_#0c0a09] active:shadow-[0_1px_0_0_#0c0a09] active:translate-y-1.5 flex items-center justify-center gap-3 cursor-pointer group"
+              className="relative w-full py-3.5 sm:py-4 px-6 bg-stone-900 hover:bg-stone-800 active:bg-stone-900 text-stone-50 font-display font-bold text-sm sm:text-base rounded-2xl transition-all border-t border-stone-600/50 shadow-[0_6px_0_0_#0c0a09] active:shadow-[0_1px_0_0_#0c0a09] active:translate-y-1.5 flex items-center justify-center gap-3 cursor-pointer group"
             >
               <ArrowRight className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
               <span>START PLAYING · ENTER EXPEDITION</span>
@@ -559,19 +549,20 @@ export default function App() {
                 hapticFeedback.tactileClick();
                 setCurrentPage('challenges');
               }}
-              className="w-full py-3 px-5 bg-stone-200/90 hover:bg-stone-300 text-stone-900 font-mono text-xs font-bold rounded-2xl transition-all border border-stone-300 shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 sm:py-3 px-4 bg-stone-200/90 hover:bg-stone-300 text-stone-900 font-mono text-xs font-bold rounded-2xl transition-all border border-stone-300 shadow-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 text-emerald-700" />
               <span>VIEW DAILY NATURE CHALLENGES ({completedChallengesCount}/{dailyChallenges.length})</span>
             </button>
-            {/* Direct Feature Launchers Grid (Weather Removed) */}
+
+            {/* Direct Feature Launchers Grid */}
             <div className="grid grid-cols-3 gap-2 pt-1">
               <button
                 onClick={() => {
                   hapticFeedback.tactileClick();
                   setCurrentPage('playing');
                 }}
-                className="p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                className="p-2 sm:p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
               >
                 <Compass className="w-4 h-4 text-emerald-700" />
                 <span>Mission & Map</span>
@@ -582,7 +573,7 @@ export default function App() {
                   hapticFeedback.tactileClick();
                   setCurrentPage('biocards');
                 }}
-                className="p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                className="p-2 sm:p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
               >
                 <Layers className="w-4 h-4 text-emerald-700" />
                 <span>Bio Cards</span>
@@ -593,7 +584,7 @@ export default function App() {
                   hapticFeedback.tactileClick();
                   setCurrentPage('blueprint');
                 }}
-                className="p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                className="p-2 sm:p-2.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
               >
                 <Cpu className="w-4 h-4 text-purple-700" />
                 <span>Blueprint</span>
@@ -607,7 +598,7 @@ export default function App() {
           PAGE 2: PLAYING GAME (MISSION HUD WITH BOTH 3D CHARACTER & GOOGLE MAP)
           ========================================================================= */}
       {currentPage === 'playing' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)]">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] pb-24 lg:pb-10">
           <MissionHUD
             explorerName={explorerName}
             isWalking={isWalking}
@@ -633,7 +624,7 @@ export default function App() {
           PAGE 3: DAILY CHALLENGES (DEDICATED FULL VIEW)
           ========================================================================= */}
       {currentPage === 'challenges' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)]">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] pb-24 lg:pb-10">
           <DailyChallengesView
             challenges={dailyChallenges}
             onToggleChallenge={handleToggleDailyChallenge}
@@ -650,7 +641,7 @@ export default function App() {
           PAGE 4: MY FIELD STICKERS (DEDICATED FULL VIEW)
           ========================================================================= */}
       {currentPage === 'stickers' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)]">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] pb-24 lg:pb-10">
           <StickerAlbumView
             unlockedStickers={unlockedStickers}
             onStartMission={() => setCurrentPage('playing')}
@@ -662,7 +653,7 @@ export default function App() {
           PAGE 5: ECOSYSTEM BIO CARDS & 3D PET COMPANION DECK
           ========================================================================= */}
       {currentPage === 'biocards' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] py-4 sm:py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4 pb-24 lg:pb-10">
           <div className="flex items-center justify-between pb-2 border-b border-stone-300">
             <div>
               <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
@@ -684,12 +675,11 @@ export default function App() {
         </main>
       )}
 
-
       {/* =========================================================================
           PAGE 7: SYSTEM ARCHITECTURE & SPATIAL AUDIO BLUEPRINT
           ========================================================================= */}
       {currentPage === 'blueprint' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] py-4 sm:py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4 pb-24 lg:pb-10">
           <div className="flex items-center justify-between pb-2 border-b border-stone-300">
             <div>
               <span className="text-[10px] font-mono font-bold uppercase text-purple-800 tracking-wider">
@@ -715,14 +705,14 @@ export default function App() {
           PAGE 8: FULL TACTICAL GOOGLE MAP & REAL-WORLD SATELLITE RADAR
           ========================================================================= */}
       {currentPage === 'map' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-6xl mx-auto space-y-4">
+        <main className="relative z-10 min-h-[calc(100vh-64px)] py-4 sm:py-6 px-3 sm:px-6 max-w-6xl mx-auto space-y-4 pb-24 lg:pb-10">
           <div className="flex items-center justify-between pb-2 border-b border-stone-300">
             <div>
               <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
                 TACTICAL RADAR · GOOGLE MAPS PLATFORM
               </span>
               <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
-                Satellite Field Radar & Waypoints
+                Satellite Field Radar
               </h2>
             </div>
             <button
@@ -736,13 +726,100 @@ export default function App() {
 
           <TacticalGoogleMap
             telemetry={telemetry}
-            waypoints={appWaypoints}
-            activeWaypoint={activeMapWaypoint}
-            onSelectWaypoint={setActiveMapWaypoint}
+            waypoints={[]}
             explorerName={explorerName}
           />
         </main>
       )}
+
+      {/* =========================================================================
+          MOBILE FIXED BOTTOM DOCKED NAVIGATION (< lg screens)
+          Thumb-accessible, perfectly aligned, zero overlapping!
+          ========================================================================= */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#ebeae5]/95 backdrop-blur-lg border-t border-stone-300/90 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-2 py-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-center justify-around select-none">
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            setCurrentPage('welcome');
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            currentPage === 'welcome'
+              ? 'text-stone-950 font-bold bg-stone-300/80 shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Compass className="w-4 h-4 mb-0.5 text-emerald-600" />
+          <span className="text-[10px] font-mono">Explorer</span>
+        </button>
+
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            setCurrentPage('playing');
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            currentPage === 'playing'
+              ? 'text-stone-950 font-bold bg-stone-300/80 shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <MapPin className="w-4 h-4 mb-0.5 text-emerald-600" />
+          <span className="text-[10px] font-mono">Mission</span>
+        </button>
+
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            setCurrentPage('challenges');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            currentPage === 'challenges'
+              ? 'text-stone-950 font-bold bg-stone-300/80 shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Award className="w-4 h-4 mb-0.5 text-amber-500" />
+          <span className="text-[10px] font-mono">Quests</span>
+          {completedChallengesCount < dailyChallenges.length && (
+            <span className="absolute top-0.5 right-2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            setCurrentPage('stickers');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            currentPage === 'stickers'
+              ? 'text-stone-950 font-bold bg-stone-300/80 shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 mb-0.5 text-sky-500" />
+          <span className="text-[10px] font-mono">Stickers</span>
+          <span className="absolute -top-0.5 right-1 text-[9px] px-1 rounded-full bg-amber-400 text-stone-950 font-bold">
+            {unlockedStickers.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            hapticFeedback.tactileClick();
+            setCurrentPage(currentPage === 'biocards' ? 'blueprint' : 'biocards');
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            currentPage === 'biocards' || currentPage === 'blueprint'
+              ? 'text-stone-950 font-bold bg-stone-300/80 shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Layers className="w-4 h-4 mb-0.5 text-emerald-700" />
+          <span className="text-[10px] font-mono">
+            {currentPage === 'blueprint' ? 'Blueprint' : 'Codex'}
+          </span>
+        </button>
+      </nav>
 
       {/* FULLSCREEN OLED POCKET MODE MODAL */}
       {isPocketModalOpen && (

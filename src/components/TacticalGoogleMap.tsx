@@ -27,16 +27,16 @@ import { hapticFeedback } from '../utils/haptics';
 
 interface TacticalGoogleMapProps {
   telemetry: MovementTelemetry;
-  waypoints: LocalityWaypoint[];
-  activeWaypoint: LocalityWaypoint | null;
-  onSelectWaypoint: (wp: LocalityWaypoint) => void;
+  waypoints?: LocalityWaypoint[];
+  activeWaypoint?: LocalityWaypoint | null;
+  onSelectWaypoint?: (wp: LocalityWaypoint) => void;
   explorerName: string;
 }
 
 export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
   telemetry,
-  waypoints,
-  activeWaypoint,
+  waypoints = [],
+  activeWaypoint = null,
   onSelectWaypoint,
   explorerName,
 }) => {
@@ -226,7 +226,7 @@ export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
                   onClick={() => {
                     hapticFeedback.tactileClick();
                     setSelectedPinWaypoint(wp);
-                    onSelectWaypoint(wp);
+                    onSelectWaypoint?.(wp);
                   }}
                 >
                   <Pin
@@ -271,7 +271,7 @@ export const TacticalGoogleMap: React.FC<TacticalGoogleMapProps> = ({
                     <button
                       onClick={() => {
                         hapticFeedback.buttonPress();
-                        onSelectWaypoint(selectedPinWaypoint);
+                        onSelectWaypoint?.(selectedPinWaypoint);
                       }}
                       className="flex-1 py-1 px-1.5 rounded bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
                     >

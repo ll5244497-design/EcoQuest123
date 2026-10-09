@@ -57,10 +57,13 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
 
     const width = container.clientWidth || 400;
     const height = container.clientHeight || 450;
-    const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
-    // Center camera on character's chest/core
-    camera.position.set(0, 0.1, 4.0);
-    camera.lookAt(0, 0.05, 0);
+    const aspect = width / height;
+    // Dynamic FOV and camera distance to prevent character cutoff and ensure clear margins
+    const fov = aspect < 0.75 ? 40 : aspect < 1.0 ? 37 : 33;
+    const camZ = aspect < 0.75 ? 4.5 : aspect < 1.0 ? 4.2 : 3.8;
+    const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 100);
+    camera.position.set(0, -0.05, camZ);
+    camera.lookAt(0, -0.05, 0);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -340,7 +343,10 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
       if (!container) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
-      camera.aspect = w / h;
+      if (w <= 0 || h <= 0) return;
+      const aspect = w / h;
+      camera.aspect = aspect;
+      camera.fov = aspect < 0.75 ? 40 : aspect < 1.0 ? 37 : 33;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
@@ -426,23 +432,24 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
       const aspect = (container.clientWidth || 400) / (container.clientHeight || 450);
       let targetZ = 3.8;
       if (aspect < 0.7) {
-        targetZ = 4.45; // Portrait smartphones
+        targetZ = 4.5; // Portrait smartphones
       } else if (aspect < 0.95) {
-        targetZ = 4.15; // Small screens / tablets portrait
+        targetZ = 4.2; // Small screens / tablets portrait
       } else if (aspect < 1.3) {
-        targetZ = 3.95; // Tablets / iPads landscape
+        targetZ = 4.0; // Tablets / iPads landscape
       } else {
-        targetZ = 3.75; // Laptops / Desktops
+        targetZ = 3.8; // Laptops / Desktops
       }
 
       if (gamePage === 'playing') {
-        targetZ *= 0.92;
+        // Ensure ample clearance on playing mission deck
+        targetZ = Math.max(targetZ, 4.1);
       }
 
       camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, 0.08);
-      camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0.1, 0.08);
+      camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0.0, 0.08);
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetZ, 0.08);
-      camera.lookAt(0, 0.05, 0);
+      camera.lookAt(0, -0.05, 0);
 
       renderer.render(scene, camera);
     };
@@ -534,11 +541,11 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center">
+    <div className="relative w-full h-full flex flex-col items-center justify-center select-none overflow-hidden">
       {/* 3D WebGL Canvas */}
       <div
         ref={mountRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing select-none touch-none"
+        className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -546,23 +553,21 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
         onClick={handleCanvasClick}
       />
 
-      {/* Explorer Character Badge & Animation Triggers */}
-      <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-20 flex flex-col gap-1.5 pointer-events-auto">
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900/85 backdrop-blur-md rounded-lg border border-stone-700/60 text-[10px] sm:text-[11px] font-mono text-stone-200 shadow-md">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-bold uppercase">♂ Human 3D Explorer</span>
-          <span className="text-emerald-400 font-semibold text-[9px] bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-500/30">
-            {isModelLoaded ? 'Nicolás 3D' : 'INITIALIZING'}
-          </span>
-        </div>
+      {/* Top Left: Tap & Gesture Hint (Out of the way of character head) */}
+      <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-stone-900/60 backdrop-blur-md border border-stone-700/40 text-[9px] sm:text-[10px] font-mono font-medium text-stone-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>DRAG 360° · TAP TO WAVE</span>
+        </span>
+      </div>
 
-        {/* Quick Animation Triggers */}
-        <div className="flex items-center gap-1 bg-stone-900/85 backdrop-blur-md p-1 rounded-lg border border-stone-700/50 text-[10px] font-mono">
+      {/* Top Right: Animation Controls (Only on welcome page, compact and pushed to corner) */}
+      {gamePage === 'welcome' && (
+        <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1 bg-stone-900/80 backdrop-blur-md p-0.5 sm:p-1 rounded-xl border border-stone-700/50 text-[10px] font-mono shadow-sm">
           {(
             [
               { id: 'idle', label: 'Idle' },
               { id: 'waving', label: 'Wave' },
-              { id: 'looking', label: 'Look' },
               { id: 'slide', label: 'Walk' },
             ] as const
           ).map((act) => (
@@ -573,42 +578,37 @@ export const CharacterCanvas: React.FC<CharacterCanvasProps> = ({
                 hapticFeedback.tactileClick();
                 switchAnimation(act.id);
               }}
-              className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+              className={`px-2 py-0.5 sm:py-1 rounded-lg transition-all cursor-pointer font-bold ${
                 activeAnimation === act.id
-                  ? 'bg-emerald-500 text-stone-950 font-bold'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800'
+                  ? 'bg-emerald-500 text-stone-950 shadow-xs'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
               }`}
             >
               {act.label}
             </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Quick Rotate & Drag Controls */}
-      <div className="absolute bottom-2 sm:bottom-2.5 flex items-center gap-1.5 sm:gap-2 z-20">
+      {/* Bottom Rotation Arrows (Positioned at corners so feet/shoes are 100% visible and unobstructed) */}
+      <div className="absolute bottom-2 left-2 z-20">
         <button
           onClick={rotateLeft}
           title="Rotate Left 45°"
           type="button"
-          className="p-1.5 sm:p-2 rounded-xl bg-stone-900/85 hover:bg-stone-900 text-stone-200 hover:text-white border border-stone-700/60 shadow-sm text-xs font-mono transition-transform active:scale-95 cursor-pointer backdrop-blur-xs flex items-center gap-1 min-h-[36px] min-w-[36px] justify-center"
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-stone-900/70 hover:bg-stone-900 text-stone-200 hover:text-white border border-stone-700/50 shadow-xs text-xs font-mono transition-transform active:scale-95 cursor-pointer backdrop-blur-sm flex items-center justify-center"
         >
           <span>⟲</span>
-          <span className="text-[10px] hidden sm:inline">-45°</span>
         </button>
+      </div>
 
-        <div className="pointer-events-none flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-900/85 backdrop-blur-xs rounded-xl border border-stone-700/60 text-[10px] sm:text-[11px] font-mono text-stone-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>DRAG 360° · TAP TO WAVE</span>
-        </div>
-
+      <div className="absolute bottom-2 right-2 z-20">
         <button
           onClick={rotateRight}
           title="Rotate Right 45°"
           type="button"
-          className="p-1.5 sm:p-2 rounded-xl bg-stone-900/85 hover:bg-stone-900 text-stone-200 hover:text-white border border-stone-700/60 shadow-sm text-xs font-mono transition-transform active:scale-95 cursor-pointer backdrop-blur-xs flex items-center gap-1 min-h-[36px] min-w-[36px] justify-center"
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-stone-900/70 hover:bg-stone-900 text-stone-200 hover:text-white border border-stone-700/50 shadow-xs text-xs font-mono transition-transform active:scale-95 cursor-pointer backdrop-blur-sm flex items-center justify-center"
         >
-          <span className="text-[10px] hidden sm:inline">+45°</span>
           <span>⟳</span>
         </button>
       </div>

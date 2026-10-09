@@ -65,8 +65,35 @@ export const SoothingSoundtrackHUD: React.FC<SoothingSoundtrackHUDProps> = ({
 
   return (
     <div className={`relative ${className}`}>
-      {/* Sleek Soundtrack Capsule */}
-      <div className="flex items-center gap-1.5 sm:gap-2 bg-stone-900/95 text-stone-100 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-full border border-stone-700/60 shadow-lg text-xs font-mono">
+      {/* Mobile Compact Capsule (< md) */}
+      <div className="flex md:hidden items-center gap-1 bg-stone-900/95 text-stone-100 backdrop-blur-md p-1 pr-2 rounded-xl border border-stone-700/60 shadow-xs text-xs font-mono">
+        <button
+          onClick={handleTogglePlay}
+          title={audioState.isPlaying ? 'Pause Music' : 'Play Music'}
+          className="p-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 transition-colors cursor-pointer"
+        >
+          {audioState.isPlaying ? (
+            <Pause className="w-3.5 h-3.5" />
+          ) : (
+            <Play className="w-3.5 h-3.5 ml-0.5" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          title="Soundtrack Menu"
+          className="p-0.5 text-stone-300 hover:text-white cursor-pointer"
+        >
+          {audioState.isMuted || audioState.volume === 0 ? (
+            <VolumeX className="w-3.5 h-3.5 text-stone-500" />
+          ) : (
+            <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+          )}
+        </button>
+      </div>
+
+      {/* Desktop Full Capsule (md and up) */}
+      <div className="hidden md:flex items-center gap-1.5 sm:gap-2 bg-stone-900/95 text-stone-100 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-full border border-stone-700/60 shadow-lg text-xs font-mono">
         {/* Play/Pause Button */}
         <button
           onClick={handleTogglePlay}
@@ -128,7 +155,7 @@ export const SoothingSoundtrackHUD: React.FC<SoothingSoundtrackHUDProps> = ({
           <span className="text-[11px] font-bold text-stone-200 max-w-[110px] sm:max-w-[140px] truncate">
             {audioState.currentTrack.title}
           </span>
-          <span className="text-[10px] text-stone-400 hidden md:inline">
+          <span className="text-[10px] text-stone-400 hidden lg:inline">
             ({audioState.currentTrack.mood})
           </span>
         </div>
