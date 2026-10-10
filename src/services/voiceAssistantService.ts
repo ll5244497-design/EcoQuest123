@@ -6,6 +6,7 @@ import { MovementTelemetry } from './movementTrackingService';
 import { GeneratedMission } from './geminiMissionService';
 import { LocalityWaypoint } from '../types';
 import { hapticFeedback } from '../utils/haptics';
+import { ambientAudioService } from './ambientAudioService';
 
 export type VoiceAssistantStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -140,8 +141,8 @@ const soundEffects = new AssistantAudioEffects();
 class VoiceAssistantService {
   private state: VoiceAssistantState = {
     status: 'idle',
-    activeVoiceId: 'IKne3meq5aSn9XLyUdCD', // Charlie - Deep, Confident, Energetic (ElevenLabs)
-    activeVoiceName: 'Charlie',
+    activeVoiceId: '21m00Tcm4TlvDq8ikWAM', // Aura - Mystical & Enthusiastic (ElevenLabs / Gemini)
+    activeVoiceName: 'Aura',
     isMuted: false,
     isWakeWordEnabled: true,
     isAutoLeadEnabled: true,
@@ -149,7 +150,7 @@ class VoiceAssistantService {
     inputAudioLevel: 0,
     outputAudioLevel: 0,
     audioSourceUsed: 'elevenlabs',
-    lastThought: 'Ready. Say "EcoQuest" or tap the mic.',
+    lastThought: 'Aura is ready. Tap the mic or an observation.',
     lastSpokenText: '',
     errorMessage: null,
   };
@@ -167,6 +168,7 @@ class VoiceAssistantService {
   private recognition: any = null;
   private isRecognitionActive = false;
   private isAwakeListening = false; // true = listening for command, false = standby for wake word
+  private currentTranscript = '';
   private silenceTimer: any = null;
   private countdownInterval: any = null;
 
@@ -187,6 +189,9 @@ class VoiceAssistantService {
   // Milestone triggers for auto-coaching
   private lastMilestoneDistance = 0;
   private lastSpokenTimestamp = 0;
+
+  // Multi-turn conversational memory for smooth, contextual outdoor dialogue
+  private conversationHistory: Array<{ role: 'user' | 'assistant'; text: string }> = [];
 
   constructor() {
     this.initSpeechRecognition();
@@ -244,14 +249,18 @@ class VoiceAssistantService {
     this.notify();
   }
 
-  public setVoiceId(voiceId: string, voiceName: string = 'Charlie') {
+  public setVoiceId(voiceId: string, voiceName: string = 'Aura') {
     this.state.activeVoiceId = voiceId;
     this.state.activeVoiceName = voiceName;
     this.notify();
   }
 
+  public getLatestMission(): GeneratedMission | undefined {
+    return this.latestContext.mission;
+  }
+
   // ---------------------------------------------------------------------------
-  // SPEECH RECOGNITION WITH WAKE-WORD DETECTION & 5-SECOND AUTO TIMEOUT
+  // SPEECH RECOGNITION WITH WAKE-WORD DETECTION & AUTO TIMEOUT
   // ---------------------------------------------------------------------------
   private initSpeechRecognition() {
     if (typeof window === 'undefined') return;
@@ -276,39 +285,42 @@ class VoiceAssistantService {
         const lastResult = event.results[event.results.length - 1];
         if (!lastResult) return;
         const transcript = (lastResult[0]?.transcript || '').trim();
-        const isFinal = lastResult.isFinal;
+        const isFinal = Boolean(lastResult.isFinal);
 
         if (!transcript) return;
+        this.currentTranscript = transcript;
 
-        // Check for wake word in speech: "ecoquest", "eco quest", "hey ecoquest"
-        const wakeWordRegex = /(?:hey\s+)?(?:eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
+        // Check for wake word in speech: "aura", "ecoquest", "hey aura", "eco quest"
+        const wakeWordRegex = /(?:hey\s+)?(?:aura|eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
         const hasWakeWord = wakeWordRegex.test(transcript);
 
         if (hasWakeWord && !this.isAwakeListening) {
           // WAKE WORD DETECTED!
-          console.log('[Voice Assistant] Wake word "EcoQuest" detected:', transcript);
+          console.log('[Voice Assistant] Wake word detected:', transcript);
           this.handleWakeWordTriggered(transcript);
           return;
         }
 
-        // If in active listening mode and we have final speech
-        if (this.isAwakeListening && isFinal) {
-          // Clean wake word if included at start
-          const cleanedText = transcript.replace(wakeWordRegex, '').trim();
-          if (cleanedText.length >= 2) {
-            console.log('[Voice Assistant] Captured user command:', cleanedText);
-            this.clearSilenceTimer();
-            soundEffects.playProcessingChime();
-            this.isAwakeListening = false;
-            this.stopMicAudioCapture();
-            this.interact(cleanedText);
+        // If in active listening mode and user is speaking
+        if (this.isAwakeListening) {
+          this.resetSilenceCountdown();
+          if (isFinal) {
+            const cleanedText = transcript.replace(wakeWordRegex, '').trim();
+            if (cleanedText.length >= 2) {
+              console.log('[Voice Assistant] Captured user command:', cleanedText);
+              this.clearSilenceTimer();
+              this.currentTranscript = '';
+              soundEffects.playProcessingChime();
+              this.isAwakeListening = false;
+              this.stopMicAudioCapture();
+              this.interact(cleanedText);
+            }
           }
         }
       };
 
       rec.onerror = (event: any) => {
         if (event.error === 'no-speech') {
-          // Benign error in continuous mode
           return;
         }
         if (event.error === 'not-allowed') {
@@ -319,20 +331,14 @@ class VoiceAssistantService {
 
       rec.onend = () => {
         this.isRecognitionActive = false;
-        // Automatically restart standby listening if wake word is enabled and not speaking
-        if (this.state.isWakeWordEnabled && this.state.status !== 'speaking') {
+        if (this.state.isWakeWordEnabled && this.state.status !== 'speaking' && !this.isAwakeListening) {
           setTimeout(() => {
             this.restartStandbySafely();
-          }, 350);
+          }, 500);
         }
       };
 
       this.recognition = rec;
-
-      // Start wake word standby automatically
-      if (this.state.isWakeWordEnabled) {
-        setTimeout(() => this.startWakeWordStandby(), 600);
-      }
     } catch (e) {
       console.warn('[Voice Assistant] Speech recognition init failed:', e);
     }
@@ -354,18 +360,15 @@ class VoiceAssistantService {
     this.restartStandbySafely();
   }
 
-  // Called when user says "EcoQuest"
+  // Called when user says "Aura" or "EcoQuest"
   private handleWakeWordTriggered(rawTranscript: string) {
-    // 1. Play the crisp live mic active chime immediately!
     soundEffects.playWakeChime();
     hapticFeedback.radarPulse();
 
-    // 2. Check if a command was already spoken in the same breath
-    const wakeWordRegex = /(?:hey\s+)?(?:eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
+    const wakeWordRegex = /(?:hey\s+)?(?:aura|eco\s*quest|echo\s*quest|equal\s*quest|aqua\s*quest)\b/i;
     const commandPart = rawTranscript.replace(wakeWordRegex, '').trim();
 
     if (commandPart.length >= 3) {
-      // User said: "EcoQuest what should I do?"
       console.log('[Voice Assistant] Direct command in wake breath:', commandPart);
       this.clearSilenceTimer();
       soundEffects.playProcessingChime();
@@ -374,26 +377,47 @@ class VoiceAssistantService {
       return;
     }
 
-    // 3. User just said "EcoQuest". Turn on active mic listening with 5-second countdown!
     this.activateListeningWithTimeout();
   }
 
-  // Activate active listening (either via "EcoQuest" or mic button tap)
-  public activateListeningWithTimeout() {
+  // Activate active listening (either via wake word or mic button tap)
+  public async activateListeningWithTimeout() {
     this.stopSpeaking();
     this.isAwakeListening = true;
+    this.currentTranscript = '';
     this.state.status = 'listening';
     this.state.silenceSecondsRemaining = 5;
     this.state.errorMessage = null;
     this.notify();
 
+    // Duck background music immediately so user voice is clear
+    ambientAudioService.duckAudioForSpeech(0.12);
+
     // Play active wake chime & start mic visualizer
     soundEffects.playWakeChime();
-    this.startMicAudioCapture();
-    this.restartStandbySafely();
+    await this.startMicAudioCapture();
+
+    // Safely start or restart recognition with user gesture
+    if (this.recognition) {
+      try {
+        if (this.isRecognitionActive) {
+          this.recognition.stop();
+        }
+        setTimeout(() => {
+          try {
+            this.recognition?.start();
+          } catch (_) {}
+        }, 120);
+      } catch (_) {}
+    }
 
     // Start 5-second silence countdown timer
     this.startSilenceCountdown();
+  }
+
+  private resetSilenceCountdown() {
+    this.state.silenceSecondsRemaining = 5;
+    this.notify();
   }
 
   private startSilenceCountdown() {
@@ -414,19 +438,27 @@ class VoiceAssistantService {
   }
 
   private handleSilenceTimeout() {
-    console.log('[Voice Assistant] 5s timeout elapsed with no command. Deactivating mic.');
+    const pendingText = this.currentTranscript.trim();
+    this.currentTranscript = '';
     this.clearSilenceTimer();
     this.isAwakeListening = false;
     this.stopMicAudioCapture();
 
-    // Play gentle sleep chime
+    if (pendingText.length >= 2) {
+      console.log('[Voice Assistant] Processing captured speech on timeout:', pendingText);
+      soundEffects.playProcessingChime();
+      this.interact(pendingText);
+      return;
+    }
+
+    console.log('[Voice Assistant] 5s timeout elapsed with no speech. Deactivating mic.');
     soundEffects.playSleepChime();
+    ambientAudioService.restoreAudioAfterSpeech();
 
     this.state.status = 'idle';
     this.state.silenceSecondsRemaining = 5;
     this.notify();
 
-    // Return to standby wake-word listening
     this.restartStandbySafely();
   }
 
@@ -445,10 +477,8 @@ class VoiceAssistantService {
     if (context) this.updateContext(context);
 
     if (this.state.status === 'listening') {
-      // User tapped to close
       this.handleSilenceTimeout();
     } else {
-      // User tapped to speak
       this.activateListeningWithTimeout();
     }
   }
@@ -495,12 +525,13 @@ class VoiceAssistantService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: query.trim(),
-          guideVoiceId: this.state.activeVoiceId,
-          guideName: this.state.activeVoiceName,
-          guideRole: 'Lead Tactical Scout & AI Companion',
+          guideVoiceId: this.state.activeVoiceId || '21m00Tcm4TlvDq8ikWAM',
+          guideName: this.state.activeVoiceName || 'Aura',
+          guideRole: 'Mystical Nature Guide & Quest Master (EcoQuest Go)',
           telemetry: ctx.telemetry || {},
           mission: ctx.mission || {},
           activeWaypoint: ctx.activeWaypoint || null,
+          history: this.conversationHistory.slice(-6),
         }),
       });
 
@@ -511,6 +542,13 @@ class VoiceAssistantService {
 
       this.state.lastThought = thought;
       this.state.lastSpokenText = spokenText;
+
+      // Append to conversational memory for smooth continuous dialogue
+      this.conversationHistory.push({ role: 'user', text: query.trim() });
+      this.conversationHistory.push({ role: 'assistant', text: spokenText });
+      if (this.conversationHistory.length > 12) {
+        this.conversationHistory = this.conversationHistory.slice(-12);
+      }
 
       // Trigger map/game actions in background
       if (action && action !== 'NONE') {
@@ -556,6 +594,9 @@ class VoiceAssistantService {
     this.lastSpokenTimestamp = Date.now();
     this.notify();
 
+    // Duck background music immediately for speech playback
+    ambientAudioService.duckAudioForSpeech(0.1);
+
     try {
       const response = await fetch('/api/voice-guide/speak', {
         method: 'POST',
@@ -595,38 +636,31 @@ class VoiceAssistantService {
         // Visualizer wave loop
         this.startOutputVisualizerLoop();
 
-        audio.onended = () => {
+        const handleAudioDone = () => {
           this.stopOutputVisualizerLoop();
           URL.revokeObjectURL(url);
           this.currentAudio = null;
           this.state.status = 'idle';
           this.state.outputAudioLevel = 0;
           this.notify();
+
+          // Restore background music smoothly after speech finishes
+          ambientAudioService.restoreAudioAfterSpeech();
+
           this.startWakeWordStandby();
           resolve();
         };
 
-        audio.onerror = () => {
-          this.stopOutputVisualizerLoop();
-          URL.revokeObjectURL(url);
-          this.currentAudio = null;
-          this.state.status = 'idle';
-          this.state.outputAudioLevel = 0;
-          this.notify();
-          this.startWakeWordStandby();
-          resolve();
-        };
+        audio.onended = handleAudioDone;
+        audio.onerror = handleAudioDone;
 
         audio.play().catch(() => {
-          this.stopOutputVisualizerLoop();
-          this.state.status = 'idle';
-          this.notify();
-          this.startWakeWordStandby();
-          resolve();
+          handleAudioDone();
         });
       } catch (_) {
         this.state.status = 'idle';
         this.notify();
+        ambientAudioService.restoreAudioAfterSpeech();
         this.startWakeWordStandby();
         resolve();
       }
@@ -711,6 +745,7 @@ class VoiceAssistantService {
           this.state.outputAudioLevel = 0;
           this.state.status = 'idle';
           this.notify();
+          ambientAudioService.restoreAudioAfterSpeech();
           this.startWakeWordStandby();
           resolve();
         };
@@ -720,6 +755,7 @@ class VoiceAssistantService {
           this.state.outputAudioLevel = 0;
           this.state.status = 'idle';
           this.notify();
+          ambientAudioService.restoreAudioAfterSpeech();
           this.startWakeWordStandby();
           resolve();
         };
@@ -728,6 +764,7 @@ class VoiceAssistantService {
       } catch (_) {
         this.state.status = 'idle';
         this.notify();
+        ambientAudioService.restoreAudioAfterSpeech();
         this.startWakeWordStandby();
         resolve();
       }
@@ -754,6 +791,7 @@ class VoiceAssistantService {
     if (this.state.status === 'speaking') {
       this.state.status = 'idle';
     }
+    ambientAudioService.restoreAudioAfterSpeech();
     this.notify();
   }
 
@@ -838,19 +876,29 @@ class VoiceAssistantService {
   }
 
   // ---------------------------------------------------------------------------
-  // PROACTIVE COACHING
+  // AURA EXPEDITION & QUEST METHODS
   // ---------------------------------------------------------------------------
+  public async startMissionWithAura(mission: GeneratedMission, explorerName: string = 'Explorer') {
+    this.updateContext({ mission, explorerName });
+    soundEffects.playWakeChime();
+    const text = `Greetings ${explorerName}! I am Aura, your mystical guide in EcoQuest Go. Your quest has begun: search the path for natural treasures to complete ${mission.title}! Tap the mic or an observation below whenever you find something.`;
+    this.state.lastThought = `Active quest: ${mission.title}. Aura standing by.`;
+    this.state.lastSpokenText = text;
+    this.notify();
+    await this.speak(text);
+  }
+
   public announceExpeditionStart(mission: GeneratedMission, explorerName: string = 'Explorer') {
-    const text = `Hey ${explorerName}! I'm Charlie, your field guide. Today we're tracking items for ${mission.title}. Start walking along your path, and say "EcoQuest" whenever you need guidance!`;
-    this.state.lastThought = `Expedition briefing for ${mission.title}.`;
+    const text = `Greetings ${explorerName}! I am Aura, your mystical guide in EcoQuest Go. Today our quest is ${mission.title}. Start walking along your path, and tell me what natural wonders you discover!`;
+    this.state.lastThought = `EcoQuest Go quest briefing: ${mission.title}.`;
     this.state.lastSpokenText = text;
     this.notify();
     this.speak(text);
   }
 
   public announceCraftVerified(craftName: string, xp: number) {
-    const text = `Outstanding work! The ${craftName} has been verified and added to your Codex. You earned ${xp} XP!`;
-    this.state.lastThought = 'Celebrating verified craft.';
+    const text = `Splendid discovery! The forest spirits celebrate your ${craftName}. You have earned ${xp} points on your quest!`;
+    this.state.lastThought = 'Celebrating verified quest craft with points.';
     this.state.lastSpokenText = text;
     this.notify();
     this.speak(text);

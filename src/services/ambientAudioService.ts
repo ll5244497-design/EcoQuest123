@@ -58,6 +58,8 @@ class AmbientAudioService {
   private currentVolume: number = 0.65;
   private isMuted: boolean = false;
   private currentTrackIndex: number = 0;
+  private isDucked: boolean = false;
+  private duckFadeTimer: any = null;
 
   // Web Audio procedural backup
   private ctx: AudioContext | null = null;
@@ -94,7 +96,7 @@ class AmbientAudioService {
     this.audioElement = new Audio();
     this.audioElement.preload = 'auto';
     this.audioElement.loop = true;
-    this.audioElement.volume = this.isMuted ? 0 : this.currentVolume;
+    this.audioElement.volume = this.effectiveVolume();
 
     const track = SOUNDTRACK_PLAYLIST[this.currentTrackIndex];
     if (!track.isProcedural) {
@@ -153,7 +155,7 @@ class AmbientAudioService {
       if (!this.audioElement.src || !this.audioElement.src.includes(track.src)) {
         this.audioElement.src = track.src;
       }
-      this.audioElement.volume = this.isMuted ? 0 : this.currentVolume;
+      this.audioElement.volume = this.effectiveVolume();
       try {
         await this.audioElement.play();
         this.isPlaying = true;
@@ -198,18 +200,102 @@ class AmbientAudioService {
     } catch {}
 
     if (this.audioElement) {
-      this.audioElement.volume = this.isMuted ? 0 : this.currentVolume;
+      this.audioElement.volume = this.effectiveVolume();
     }
 
     if (this.masterGain && this.ctx) {
       const now = this.ctx.currentTime;
       this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
       this.masterGain.gain.exponentialRampToValueAtTime(
-        this.isMuted ? 0.0001 : Math.max(0.0001, this.currentVolume * 0.4),
+        this.isMuted ? 0.0001 : Math.max(0.0001, this.effectiveVolume() * 0.4),
         now + 0.1
       );
     }
     this.notify();
+  }
+
+  // Calculate actual volume accounting for mute and ducking (outdoor speech isolation)
+  private effectiveVolume(): number {
+    if (this.isMuted) return 0;
+    // When ducked, reduce music down to 12% of normal volume so human speech cuts through cleanly outdoors
+    if (this.isDucked) return Math.max(0, this.currentVolume * 0.12);
+    return this.currentVolume;
+  }
+
+  // Automatically lowers background music when voice assistant is listening or speaking
+  public duckAudioForSpeech(duckFactor = 0.12) {
+    this.isDucked = true;
+    if (this.duckFadeTimer) {
+      clearInterval(this.duckFadeTimer);
+      this.duckFadeTimer = null;
+    }
+
+    const targetVol = this.isMuted ? 0 : Math.max(0, this.currentVolume * duckFactor);
+
+    if (this.audioElement) {
+      // Smooth fade down over 150ms
+      const startVol = this.audioElement.volume;
+      const steps = 6;
+      let step = 0;
+      this.duckFadeTimer = setInterval(() => {
+        step++;
+        if (this.audioElement) {
+          const ratio = step / steps;
+          this.audioElement.volume = Math.max(0, startVol + (targetVol - startVol) * ratio);
+        }
+        if (step >= steps) {
+          if (this.duckFadeTimer) clearInterval(this.duckFadeTimer);
+          this.duckFadeTimer = null;
+        }
+      }, 25);
+    }
+
+    if (this.masterGain && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        const target = this.isMuted ? 0.0001 : Math.max(0.0001, targetVol * 0.4);
+        this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+        this.masterGain.gain.exponentialRampToValueAtTime(target, now + 0.15);
+      } catch (_) {}
+    }
+  }
+
+  // Restores music to standard expedition level once conversation or speech concludes
+  public restoreAudioAfterSpeech() {
+    this.isDucked = false;
+    if (this.duckFadeTimer) {
+      clearInterval(this.duckFadeTimer);
+      this.duckFadeTimer = null;
+    }
+
+    const targetVol = this.isMuted ? 0 : this.currentVolume;
+
+    if (this.audioElement) {
+      // Smooth fade up over 300ms
+      const startVol = this.audioElement.volume;
+      const steps = 8;
+      let step = 0;
+      this.duckFadeTimer = setInterval(() => {
+        step++;
+        if (this.audioElement) {
+          const ratio = step / steps;
+          this.audioElement.volume = Math.min(1, Math.max(0, startVol + (targetVol - startVol) * ratio));
+        }
+        if (step >= steps) {
+          if (this.duckFadeTimer) clearInterval(this.duckFadeTimer);
+          this.duckFadeTimer = null;
+        }
+      }, 35);
+    }
+
+    if (this.masterGain && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        const target = this.isMuted ? 0.0001 : Math.max(0.0001, targetVol * 0.4);
+        this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+        this.masterGain.gain.exponentialRampToValueAtTime(target, now + 0.3);
+      } catch (_) {}
+    }
   }
 
   public toggleMute(): void {

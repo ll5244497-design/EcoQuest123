@@ -175,10 +175,10 @@ export const VoiceAssistantHUD: React.FC<VoiceAssistantHUDProps> = ({
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-display font-extrabold text-xs sm:text-sm text-stone-100 tracking-tight">
-                    Charlie
+                    Aura
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-stone-800 text-stone-400 border border-stone-700/50">
-                    AI Guide
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-stone-800 text-emerald-400 border border-stone-700/50">
+                    EcoQuest Guide
                   </span>
 
                   {/* 5-second countdown indicator when listening */}
@@ -203,17 +203,17 @@ export const VoiceAssistantHUD: React.FC<VoiceAssistantHUDProps> = ({
                 <div className="text-[11px] sm:text-xs text-stone-400 flex items-center gap-1.5 truncate">
                   {isListening ? (
                     <span className="text-rose-300 font-medium truncate">
-                      Listening to your command... (mic turns off in {state.silenceSecondsRemaining}s)
+                      Listening to your observation... (tap mic or pause to send)
                     </span>
                   ) : isSpeaking ? (
                     <span className="text-emerald-300 font-medium truncate">
-                      Audio playing through speakers/earphones
+                      Aura speaking through mobile earphones
                     </span>
                   ) : isThinking ? (
-                    <span className="text-amber-300 font-medium">Processing your outdoor request...</span>
+                    <span className="text-amber-300 font-medium">Evaluating quest progress...</span>
                   ) : (
                     <span className="truncate">
-                      Say <strong className="text-emerald-400 font-mono font-bold">"EcoQuest"</strong> or tap mic to speak
+                      Say <strong className="text-emerald-400 font-mono font-bold">"Aura"</strong> or tap mic to speak
                     </span>
                   )}
                 </div>
@@ -315,9 +315,9 @@ export const VoiceAssistantHUD: React.FC<VoiceAssistantHUDProps> = ({
                   Active Voice Persona:
                 </label>
                 <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700 text-stone-300 text-[11px]">
-                  Charlie · ElevenLabs Voice ID: <code className="text-amber-400">IKne3meq5aSn9XLyUdCD</code>
+                  Aura · ElevenLabs / Gemini Neural Engine: <code className="text-emerald-400">21m00Tcm4TlvDq8ikWAM</code>
                   <div className="text-stone-400 text-[10px] mt-0.5">
-                    Audio Engine: {state.audioSourceUsed === 'elevenlabs' ? 'ElevenLabs Turbo' : 'Neural Natural Speech Engine'}
+                    Audio Engine: {state.audioSourceUsed === 'elevenlabs' ? 'ElevenLabs Turbo v2.5' : 'Neural Natural Speech Engine'}
                   </div>
                 </div>
               </div>

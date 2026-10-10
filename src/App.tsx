@@ -830,7 +830,7 @@ export default function App() {
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/10">
               <div className="flex items-center gap-2 font-mono text-sm text-white font-bold">
                 <Smartphone className="w-4 h-4 text-emerald-400" />
-                <span>OLED POCKET MODE SIMULATOR</span>
+                <span>PHONE MODE · AURA QUEST HUD (ECOQUEST GO)</span>
               </div>
               <button
                 onClick={() => setIsPocketModalOpen(false)}
@@ -839,7 +839,11 @@ export default function App() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <PocketModeHUD isFullScreen={true} onClose={() => setIsPocketModalOpen(false)} />
+            <PocketModeHUD
+              isFullScreen={true}
+              onClose={() => setIsPocketModalOpen(false)}
+              explorerName={explorerName}
+            />
           </div>
         </div>
       )}

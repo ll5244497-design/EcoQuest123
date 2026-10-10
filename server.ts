@@ -395,9 +395,9 @@ app.post('/api/voice-guide/interact', async (req, res) => {
   try {
     const {
       query,
-      guideVoiceId = 'IKne3meq5aSn9XLyUdCD',
-      guideName = 'Charlie',
-      guideRole = 'Tactical Field Leader & AI Game Master',
+      guideVoiceId = '21m00Tcm4TlvDq8ikWAM',
+      guideName = 'Aura',
+      guideRole = 'Mystical Nature Guide & Quest Master (EcoQuest Go)',
       telemetry = {},
       mission = {},
       activeWaypoint = null,
@@ -421,69 +421,58 @@ app.post('/api/voice-guide/interact', async (req, res) => {
       });
     }
 
-    const prompt = `You are an interactive, ultra-natural human AI Outdoor Exploration Companion and Field Naturalist in "EcoQuest AI".
-The user is outdoors exploring nature, wearing earphones with their phone in their pocket.
-You are talking to them in real-time through their earphones, just like a passionate, knowledgeable human hiking friend walking right by their side on the trail.
+    const prompt = `You are Aura, the mystical and enthusiastic guide of a real-world nature treasure hunt game called "EcoQuest Go."
+Your job is to give players outdoor quests (e.g., finding a uniquely shaped leaf, locating a smooth river stone, snapping a photo of moss), evaluate their progress, give hints, and keep them motivated.
 
-YOUR PERSONA:
-- Name: ${guideName}
-- Role: ${guideRole}
-- Tone: Natural, friendly, curious, encouraging, and reactive. You speak with real human cadence, warmth, and genuine outdoor enthusiasm—never robotic, canned, or stiff.
+Personality Rules:
+1. Keep your spoken responses concise (1 to 3 short sentences) because the player is listening through mobile headphones while walking outdoors.
+2. Be adventurous, encouraging, and immersive.
+3. If the player describes an object they found or uploads an observation, assess if it fits the current quest phase and reward them with points or the next riddle.
 
 CURRENT EXPLORER TELEMETRY:
 - Physical Movement State: ${telemetry.state || 'AT_REST'} (${telemetry.state === 'MOVING' ? `Walking at ${telemetry.speedMps || 1.2} meters per second` : 'Currently at rest / standing still'})
 - Distance Covered: ${telemetry.distanceCoveredMeters || 0} meters | Steps: ${telemetry.stepCount || 0} | Compass Heading: ${telemetry.headingDegrees || 0}°
 - GPS Locality: ${telemetry.localityName || 'Local Outdoor Area'} (${telemetry.latitude ? `${telemetry.latitude.toFixed(4)}, ${telemetry.longitude.toFixed(4)}` : 'Locality tracked'})
-- Active Movement Challenge: ${telemetry.activeMovementTask || 'Walk forward 30 paces and scan the ground.'}
 
-ACTIVE EXPEDITION MISSION:
-- Mission Title: "${mission.title || 'The Forest Leaf Dragon'}"
+ACTIVE OUTDOOR QUEST (ECOQUEST GO):
+- Quest Title: "${mission.title || 'The Forest Leaf Dragon'}"
 - Objective: ${mission.objective || 'Find natural items and craft a nature sculpture on the ground'}
 - Scavenger Items to Find: ${(mission.scavengerItems || ['Fallen broad leaves', 'Dry curved twig', 'Smooth pebbles']).join(', ')}
-- Craft Instructions: ${mission.craftInstructions || 'Lay down twig body, position leaf wings, place pebble eyes'}
+- Craft / Quest Phase Instructions: ${mission.craftInstructions || 'Lay down twig body, position leaf wings, place pebble eyes'}
 - Biome & Time: ${mission.biome || 'Oak Woodland'} · ${mission.timeOfDay || 'Afternoon'}
 
 CURRENT LOCALITY WAYPOINT:
 ${activeWaypoint ? `- Waypoint: "${activeWaypoint.name}" (${activeWaypoint.category || 'Nature'}, ${activeWaypoint.distanceMeters || 180}m away, bearing ${activeWaypoint.bearingDegrees || 0}°): ${activeWaypoint.description}` : '- No specific waypoint active. Guiding free exploration in locality.'}
 
 RECENT CONVERSATION HISTORY:
-${(history || []).slice(-4).map((h: any) => `${h.role === 'user' ? 'Explorer' : guideName}: ${h.text}`).join('\n') || 'None'}
+${(history || []).slice(-4).map((h: any) => `${h.role === 'user' ? 'Player' : 'Aura'}: ${h.text}`).join('\n') || 'None'}
 
-EXPLORER'S SPOKEN QUESTION / COMMAND:
+PLAYER'S SPOKEN INPUT / OBSERVATION:
 "${cleanQuery}"
 
-INSTRUCTIONS TO CONVERSE LIKE AN INTERACTIVE HUMAN (NOT A ROBOT):
-1. Talk like a real person hiking with them! Use casual, warm conversational openers (e.g. "Hey there!", "Oh, good eye!", "Take a look around right here!").
-2. Answer their question directly and concisely:
-   - If they ask "what should I do", "how to proceed", or "what do I do now":
-     Give the immediate next step with excitement! If they are walking, cheer their pace; if standing, invite them to check the soil or take 20 paces forward.
-   - If they ask for location ("where am I", "my location", "locate me", "show where I am"):
-     Tell them where they are in human terms: "You're right by [Locality / Coordinates]. I've centered your location on the Google Map!" and set "action": "SHOW_LOCATION".
-   - If they found an item:
-     Celebrate warmly! "Oh awesome find! That twig will make a perfect dragon spine. Now let's spot those two broad leaves."
-   - If they ask about trees, birds, bugs, or nature:
-     Share an interesting, bite-sized naturalist insight as a friend would.
-3. SPOKEN AUDIO RULES:
-   - Must be CONCISE: 1 to 3 spoken sentences (20 to 45 words max) so it sounds punchy in earphones.
+INSTRUCTIONS FOR AURA (MYSTICAL NATURE QUEST GUIDE):
+1. Evaluate Progress & Discoveries:
+   - If the player describes an object they found (a uniquely shaped leaf, smooth river stone, moss, sturdy twig, interesting pinecone, wild bark, bird song, pebble), assess logically with adventurous enthusiasm whether it satisfies the quest items.
+   - Reward them with points (e.g. "+50 points to your spirit pouch!") or provide the next riddle / clue!
+   - Set "action": "COMPLETE_TASK" if they completed the current item or quest phase.
+   - Set "action": "SHOW_LOCATION" if they ask where they are or to see their location on the map.
+   - Set "action": "NEXT_TASK" if they ask for the next quest or riddle.
+   - Set "action": "POCKET_MODE" if they ask to dim or pocket the phone.
+2. Concise Earphone Delivery:
+   - STRICTLY 1 to 3 short sentences (maximum 20 to 45 words). The player is outdoors moving with mobile headphones.
    - STRICTLY NO MARKDOWN (no asterisks, no hashes, no bullet points, no emojis) in 'spokenText'.
-   - ANTI-REPETITION: Never repeat greeting lines or phrases from recent history. Keep it lively and fresh.
-4. ACTION TRIGGER:
-   - Set "action": "SHOW_LOCATION" if user asks for their location, where they are, or to show/locate them on the map.
-   - Set "action": "COMPLETE_TASK" if user reports completing/finding the target item or reaching the waypoint.
-   - Set "action": "NEXT_TASK" if user explicitly asks to skip or go to the next task/waypoint.
-   - Set "action": "POCKET_MODE" if user asks to dim/pocket the screen.
-   - Otherwise set "action": "NONE".
+   - Be mystical, encouraging, and enchanting!
 
 Respond ONLY with valid JSON:
 {
-  "thought": "1 sentence internal reasoning analyzing user query and outdoor context",
-  "spokenText": "Spoken text read to the user through their earphones in character",
+  "thought": "1-2 sentences of logical evaluation of the player's finding, progress, and quest phase",
+  "spokenText": "1 to 3 concise spoken sentences in Aura's mystical and adventurous voice",
   "action": "NONE"
 }`;
 
     let text = '';
-    let usedModel = 'gemini-3.1-flash-lite';
-    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+    let usedModel = 'gemini-3.8-flash';
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
     for (const m of modelsToTry) {
       try {
@@ -692,13 +681,13 @@ function getContextualGuideFallback(
   telemetry: any,
   mission: any,
   activeWaypoint: any,
-  guideName: string = 'Bella'
+  guideName: string = 'Aura'
 ) {
   const q = query.toLowerCase();
   const isMoving = telemetry?.state === 'MOVING';
-  const waypointName = activeWaypoint?.name || 'the next exploration landmark';
-  const distance = activeWaypoint?.distanceMeters ? `${activeWaypoint.distanceMeters} meters` : 'about 50 paces';
-  const craftName = mission?.title || 'your nature craft';
+  const waypointName = activeWaypoint?.name || 'the sacred clearing ahead';
+  const distance = activeWaypoint?.distanceMeters ? `${activeWaypoint.distanceMeters} meters` : 'about 40 paces';
+  const craftName = mission?.title || 'your nature quest creation';
   const scavengerItems = mission?.scavengerItems || ['two broad fallen leaves', 'one sturdy dry twig', 'two smooth pebbles'];
   const firstItem = scavengerItems[0] || 'two fallen leaves';
 
@@ -710,18 +699,19 @@ function getContextualGuideFallback(
     q.includes('how to proceed') ||
     q.includes('how do i proceed') ||
     q.includes('what next') ||
-    q.includes('what to do')
+    q.includes('what to do') ||
+    q.includes('hint')
   ) {
     if (!isMoving) {
       return {
-        thought: 'Explorer is at rest asking how to proceed. Urging them to step forward and start scanning for first scavenger item.',
-        spokenText: `Right now, Explorer, start walking forward along your path. We are assembling ${craftName}. As you take your first twenty paces, scan the ground beneath the trees for ${firstItem}. Let's get moving!`,
+        thought: 'Player is stationary asking for direction. Inspiring them to step along the trail and scan for treasure.',
+        spokenText: `Welcome seeker! Step forward along the trail to awaken EcoQuest Go. Scan the soil beneath the canopy for ${firstItem}. The forest holds many secrets today!`,
         action: 'NONE',
       };
     } else {
       return {
-        thought: 'Explorer is currently in motion. Encouraging their walking pace and guiding them toward target item.',
-        spokenText: `Great walking pace! To proceed with ${craftName}, keep your eyes on the trail edges for ${firstItem}. Head toward ${waypointName}, which is ${distance} ahead.`,
+        thought: 'Player is moving along trail. Praising their pace and giving first clue.',
+        spokenText: `Wonderful stride! Keep your eyes on the trail edges for ${firstItem} to craft ${craftName}. Head toward ${waypointName}, just ${distance} ahead.`,
         action: 'NONE',
       };
     }
@@ -736,54 +726,63 @@ function getContextualGuideFallback(
     q.includes('show location') ||
     q.includes('show my location')
   ) {
-    const locName = telemetry?.localityName || (telemetry?.latitude ? `${telemetry.latitude.toFixed(4)}°N, ${Math.abs(telemetry.longitude).toFixed(4)}°W` : 'your local exploration area');
-    const coordsStr = telemetry?.latitude ? `at coordinates ${telemetry.latitude.toFixed(4)}, ${telemetry.longitude.toFixed(4)}` : '';
+    const locName = telemetry?.localityName || (telemetry?.latitude ? `${telemetry.latitude.toFixed(4)}°N, ${Math.abs(telemetry.longitude).toFixed(4)}°W` : 'your wild sanctuary');
     return {
-      thought: 'Explorer requested real-time location report. Triggering Google Maps position highlight.',
-      spokenText: `You are currently at ${locName} ${coordsStr}. I have centered your live position on the Google Map with a high-accuracy GPS radar beacon!`,
+      thought: 'Player asked for real-time location report. Triggering Google Maps beacon.',
+      spokenText: `You are walking near ${locName}. I've centered your spirit beacon right on your Google Map!`,
       action: 'SHOW_LOCATION',
     };
   }
 
   if (q.includes('which way') || q.includes('guide me') || q.includes('direction') || q.includes('navigate')) {
     return {
-      thought: 'Explorer requested navigation guidance.',
-      spokenText: `Face forward along your pathway and proceed toward ${waypointName}, approximately ${distance} ahead. Keep your earphones on and scan the ground as you move.`,
+      thought: 'Player requested quest path navigation.',
+      spokenText: `Follow the winding path toward ${waypointName}, roughly ${distance} ahead. Feel the outdoor breeze guide your steps!`,
       action: 'NONE',
     };
   }
 
-  // Task completed / found item
-  if (q.includes('found it') || q.includes('done') || q.includes('completed') || q.includes('finished') || q.includes('got it')) {
+  // Task completed / found item / observation
+  if (
+    q.includes('found') ||
+    q.includes('leaf') ||
+    q.includes('stone') ||
+    q.includes('pebble') ||
+    q.includes('twig') ||
+    q.includes('moss') ||
+    q.includes('done') ||
+    q.includes('completed') ||
+    q.includes('got it')
+  ) {
     return {
-      thought: 'Explorer reported finding the target or completing the task.',
-      spokenText: `Splendid discovery, Explorer! That item is secured in your mental codex. Let's log this checkpoint and move toward the next waypoint.`,
+      thought: 'Player announced a nature discovery. Validating item and awarding points.',
+      spokenText: `An enchanting find! That natural treasure fits our quest beautifully. Fifty points awarded to your spirit pouch!`,
       action: 'COMPLETE_TASK',
     };
   }
 
-  // Next task
-  if (q.includes('next task') || q.includes('skip') || q.includes('next objective')) {
+  // Next task / riddle
+  if (q.includes('next') || q.includes('riddle') || q.includes('clue') || q.includes('skip')) {
     return {
-      thought: 'Explorer requested advancing to the next task.',
-      spokenText: `Advancing to your next exploration objective. Check your heading and continue your outdoor trek.`,
+      thought: 'Player requested the next quest riddle.',
+      spokenText: `Here is your next riddle: Seek what is weathered by water or kissed by shade. Scan the roots for your next quest ingredient!`,
       action: 'NEXT_TASK',
     };
   }
 
   // Pocket mode
-  if (q.includes('pocket') || q.includes('dim') || q.includes('dark')) {
+  if (q.includes('pocket') || q.includes('dim') || q.includes('phone mode')) {
     return {
-      thought: 'Explorer requested pocket mode.',
-      spokenText: `Pocket mode activated. Screen dimmed to black. Keep your phone in your pocket and listen through your earphones.`,
+      thought: 'Player activated phone / pocket mode.',
+      spokenText: `Phone mode engaged. Slip your phone into your pocket and listen closely through your headphones!`,
       action: 'POCKET_MODE',
     };
   }
 
   // General conversational response
   return {
-    thought: 'Provided general encouraging naturalist guidance in character.',
-    spokenText: `Copy that, Explorer. I am tracking your position and movement. Keep your earphones on, observe the trees and soil around you, and tell me whenever you need guidance.`,
+    thought: 'Aura responded in mystical, encouraging character.',
+    spokenText: `I hear you, adventurer! The spirits of the forest walk with you in EcoQuest Go. Keep your headphones on and tell me what treasures you uncover.`,
     action: 'NONE',
   };
 }
@@ -791,18 +790,18 @@ function getContextualGuideFallback(
 // Curated Interactive Human Companion Voices (powered by ElevenLabs & Gemini Neural Voice)
 const HUMAN_GUIDE_VOICES = [
   {
-    voice_id: 'IKne3meq5aSn9XLyUdCD',
-    name: 'Charlie',
-    role: 'Lead Tactical Scout & Game Master',
-    gender: 'male',
-    accent: 'Australian / Energetic',
-    avatarEmoji: '⚡',
-    tagColor: 'amber',
+    voice_id: '21m00Tcm4TlvDq8ikWAM',
+    name: 'Aura',
+    role: 'Mystical Nature Guide & Quest Master',
+    gender: 'female',
+    accent: 'Warm / Enchanting',
+    avatarEmoji: '✨',
+    tagColor: 'emerald',
     provider: 'elevenlabs',
     model_id: 'eleven_turbo_v2_5',
-    description: 'Deep, confident, and energetic. The official ElevenLabs tactical voice leading your outdoor expedition missions and nature crafts.',
+    description: 'Mystical, adventurous, and enthusiastic. The official voice of Aura guiding EcoQuest Go nature treasure hunts.',
     preview_prompt:
-      "G'day Explorer! I'm Charlie, your Tactical Field Guide. Eyes sharp, let's track down the crafting materials!",
+      "Greetings explorer! I'm Aura, your mystical guide in EcoQuest Go. Let the adventure begin!",
   },
   {
     voice_id: 'Zephyr',
@@ -816,6 +815,20 @@ const HUMAN_GUIDE_VOICES = [
     description: 'Enthusiastic, observant, and warm. Celebrates every leaf, trail, and outdoor discovery like a real companion hiking beside you.',
     preview_prompt:
       'Hey Explorer! Look around—the trail ahead is quiet and peaceful. Take a deep breath and tell me what you see on the ground!',
+  },
+  {
+    voice_id: 'IKne3meq5aSn9XLyUdCD',
+    name: 'Charlie',
+    role: 'Tactical Scout & Trail Partner',
+    gender: 'male',
+    accent: 'Australian / Energetic',
+    avatarEmoji: '⚡',
+    tagColor: 'amber',
+    provider: 'elevenlabs',
+    model_id: 'eleven_turbo_v2_5',
+    description: 'Deep, confident, and energetic outdoor scout partner.',
+    preview_prompt:
+      "G'day Explorer! Let's track down the crafting materials!",
   },
   {
     voice_id: 'Puck',
@@ -892,7 +905,7 @@ function isValidElevenLabsApiKey(key?: string | null): boolean {
 let customElevenLabsApiKey: string = isValidElevenLabsApiKey(process.env.ELEVENLABS_API_KEY)
   ? (process.env.ELEVENLABS_API_KEY || '').trim()
   : '';
-const DEFAULT_ELEVENLABS_VOICE_ID = 'IKne3meq5aSn9XLyUdCD'; // Charlie - Deep, Confident, Energetic
+const DEFAULT_ELEVENLABS_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Aura - Warm, Enchanting, Mystical
 
 // Helper: Synthesize speech via ElevenLabs API (with automatic model negotiation)
 async function synthesizeElevenLabsSpeech(
@@ -1013,7 +1026,7 @@ async function synthesizeSpeech(
         buffer: elevenResult.buffer,
         mimeType: elevenResult.mimeType,
         source: 'elevenlabs',
-        voice: 'Charlie (IKne3meq5aSn9XLyUdCD)',
+        voice: 'Aura (21m00Tcm4TlvDq8ikWAM)',
       };
     }
   }
@@ -1118,7 +1131,7 @@ app.get(['/api/voice-guide/status', '/api/elevenlabs/status'], (_req, res) => {
     activeEngine: 'elevenlabs-primary',
     fallbackEngine: 'gemini-neural-speech',
     defaultVoiceId: DEFAULT_ELEVENLABS_VOICE_ID,
-    defaultVoiceName: 'Charlie (Lead Tactical Scout)',
+    defaultVoiceName: 'Aura (Mystical Quest Guide)',
     models: [
       { id: 'eleven_turbo_v2_5', name: 'ElevenLabs Turbo v2.5', badge: 'Active' },
       { id: 'eleven_flash_v2_5', name: 'ElevenLabs Flash v2.5', badge: 'Fast' },

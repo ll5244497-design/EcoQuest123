@@ -218,7 +218,7 @@ export function createAudioReactivePetMaterial() {
             ElevenLabs & Neural TTS
           </div>
           <p className="text-xs text-stone-500">
-            Synthesizes lead guide Charlie (ElevenLabs Voice ID: IKne3meq5aSn9XLyUdCD, Turbo v2.5) with Gemini Neural Voice fallback for high-fidelity spoken leadership.
+            Synthesizes lead guide Aura (ElevenLabs Voice ID: 21m00Tcm4TlvDq8ikWAM, Turbo v2.5) with Gemini Neural Voice fallback for high-fidelity mystical quest leadership in EcoQuest Go.
           </p>
         </div>
 

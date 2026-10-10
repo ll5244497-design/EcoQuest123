@@ -19,6 +19,7 @@ import {
   Compass,
   X,
   Music,
+  Headphones,
 } from 'lucide-react';
 import { CharacterCanvas } from './CharacterCanvas';
 import { PhotoScavengerModal } from './PhotoScavengerModal';
@@ -153,6 +154,13 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
     if (shouldStart) {
       ambientAudioService.start();
     }
+  };
+
+  const handleStartMissionPhoneMode = async () => {
+    hapticFeedback.startPlaying();
+    handleToggleExpedition(true);
+    voiceAssistantService.startMissionWithAura(activeMission, explorerName);
+    onOpenPocketMode();
   };
 
   const handleGenerateGeminiMission = async () => {
@@ -302,13 +310,25 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
             )}
           </button>
 
+          {/* Start Mission with Aura in Phone Mode */}
+          <button
+            onClick={handleStartMissionPhoneMode}
+            title="Start Expedition in Phone Mode with Aura"
+            className="px-3 sm:px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-mono text-xs font-black border border-emerald-400 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 animate-pulse"
+          >
+            <Play className="w-3.5 h-3.5 fill-stone-950 shrink-0" />
+            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">START MISSION</span>
+            <span className="sm:hidden">START</span>
+          </button>
+
           {/* Pocket Mode Actuator */}
           <button
             onClick={onOpenPocketMode}
             className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-stone-200/90 hover:bg-stone-300 text-stone-800 font-mono text-xs font-bold border border-stone-300/80 shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-[11px] sm:text-xs">POCKET</span>
+            <span className="text-[11px] sm:text-xs">PHONE MODE</span>
           </button>
         </div>
       </div>
@@ -432,23 +452,35 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
           </div>
         </div>
 
-        {/* Reward & Craft Photo Button */}
+        {/* Reward & Craft Photo Buttons */}
         <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-800 bg-stone-200/80 px-3 py-2 rounded-xl border border-stone-300">
             <span className="text-base">{activeMission.stickerReward.badgeEmoji}</span>
             <span>+{activeMission.rewardXp} XP · {activeMission.stickerReward.name}</span>
           </div>
 
-          <button
-            onClick={() => {
-              hapticFeedback.buttonPress();
-              setIsPhotoModalOpen(true);
-            }}
-            className="py-3 px-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-wider bg-stone-900 hover:bg-stone-800 text-stone-50 border-t border-stone-600 shadow-[0_4px_0_0_#0c0a09] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <Camera className="w-4 h-4 text-emerald-400" />
-            <span>CRAFT ON SOIL & SNAP PHOTO</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Primary Action: Start Mission in Phone Mode */}
+            <button
+              onClick={handleStartMissionPhoneMode}
+              className="py-3 px-4 sm:px-6 rounded-2xl font-mono text-xs sm:text-sm font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-stone-950 border-t border-emerald-300 shadow-[0_4px_0_0_#065f46] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+            >
+              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-stone-950 shrink-0" />
+              <Headphones className="w-4 h-4 sm:w-5 sm:h-5 text-stone-950 shrink-0" />
+              <span>START MISSION (PHONE MODE 📱)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                hapticFeedback.buttonPress();
+                setIsPhotoModalOpen(true);
+              }}
+              className="py-3 px-4 sm:px-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-wider bg-stone-900 hover:bg-stone-800 text-stone-50 border-t border-stone-600 shadow-[0_4px_0_0_#0c0a09] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>CRAFT & SNAP PHOTO</span>
+            </button>
+          </div>
         </div>
       </section>
 
